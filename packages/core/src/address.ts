@@ -1,4 +1,4 @@
-import type { ComponentDecl, Document, Item, LayoutDecl, PageDecl, UiNode } from "./ast.js";
+import type { ComponentDecl, Document, Item, LayoutDecl, PageDecl, ScenarioDecl, UiNode } from "./ast.js";
 import { OrchidError } from "./diagnostics.js";
 
 /**
@@ -99,13 +99,24 @@ export function findRoot(doc: Document, address: string): Root | undefined {
 }
 
 const SEGMENT = /^(#[A-Za-z_$][\w$]*|[A-Za-z_$][\w$]*\[\d+\]|then|else)$/;
-const HEAD = /^(page|layout|component):.+$/;
+const HEAD = /^(page|layout|component|scenario):.+$/;
+
+/** `scenario:<name>` for a scenario declaration. */
+export function scenarioAddress(s: ScenarioDecl): string {
+  return `scenario:${s.name}`;
+}
+
+/** Find a scenario by address (`scenario:<name>`) or bare name. */
+export function findScenario(doc: Document, addressOrName: string): ScenarioDecl | undefined {
+  const name = addressOrName.startsWith("scenario:") ? addressOrName.slice("scenario:".length).trim() : addressOrName;
+  return doc.items.find((i): i is ScenarioDecl => i.kind === "scenario" && i.name === name);
+}
 
 /** Validate and normalise whitespace in an address. */
 export function normalize(address: string): string {
   const parts = address.split(">").map((p) => p.trim());
   if (!HEAD.test(parts[0] ?? "")) {
-    throw new OrchidError({ code: "O204", severity: "error", message: `Invalid address \`${address}\`: must start with page:, layout: or component:` });
+    throw new OrchidError({ code: "O204", severity: "error", message: `Invalid address \`${address}\`: must start with page:, layout:, component: or scenario:` });
   }
   for (const p of parts.slice(1)) {
     if (!SEGMENT.test(p)) {

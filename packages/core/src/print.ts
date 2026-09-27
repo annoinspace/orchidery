@@ -1,4 +1,4 @@
-import { exprToCode, type Document, type Expr, type Item, type Param, type UiNode } from "./ast.js";
+import { exprToCode, type Document, type Expr, type Item, type Param, type ScenarioStep, type UiNode } from "./ast.js";
 
 const INDENT = "  ";
 
@@ -21,6 +21,8 @@ function printItem(item: Item): string {
     }
     case "component":
       return `component ${item.name}${printParams(item.params)} {\n${printUi(item.body, 1)}\n}`;
+    case "scenario":
+      return `scenario ${JSON.stringify(item.name)} {\n${item.steps.map((s) => INDENT + printStep(s)).join("\n")}\n}`;
     case "layout": {
       const blocks: string[] = [];
       if (item.load) blocks.push(printLoad(item.load.bindings));
@@ -44,6 +46,27 @@ function printItem(item: Item): string {
       blocks.push(`${INDENT}ui {\n${printUi(item.ui, 2)}\n${INDENT}}`);
       return `page ${JSON.stringify(item.route)} {\n${blocks.join("\n\n")}\n}`;
     }
+  }
+}
+
+export function printStep(s: ScenarioStep): string {
+  const q = JSON.stringify;
+  switch (s.kind) {
+    case "visit": return `visit ${q(s.path)}`;
+    case "click": return `click ${q(s.target)}`;
+    case "fill": return `fill ${q(s.target)} ${q(s.value)}`;
+    case "submit": return `submit ${q(s.target)}`;
+    case "press": return `press ${q(s.key)}`;
+    case "wait": return `wait ${s.ms}`;
+    case "screenshot": return `screenshot ${q(s.name)}`;
+    case "expect":
+      switch (s.check) {
+        case "visible":
+        case "hidden": return `expect ${q(s.target)} ${s.check}`;
+        case "count": return `expect ${q(s.target)} count ${s.value}`;
+        case "attr": return `expect ${q(s.target)} attr ${q(s.attr ?? "")} ${q(String(s.value ?? ""))}`;
+        default: return `expect ${q(s.target)} ${s.check} ${q(String(s.value ?? ""))}`;
+      }
   }
 }
 

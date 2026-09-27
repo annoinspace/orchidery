@@ -12,12 +12,14 @@ import type {
   PageDecl,
   Param,
   Prop,
+  ScenarioDecl,
+  ScenarioStep,
   TokensDecl,
   UiNode,
 } from "./ast.js";
 import { Scanner } from "./lexer.js";
 
-const TOP_LEVEL = ["tokens", "import", "component", "layout", "page"];
+const TOP_LEVEL = ["tokens", "import", "component", "layout", "page", "scenario"];
 const PAGE_BLOCKS = ["load", "action", "meta", "ui"];
 const LAYOUT_BLOCKS = ["load", "meta", "ui"];
 const DOTTED = /^[A-Za-z_$][\w$]*(\.[A-Za-z_$][\w$]*)*$/;
@@ -81,8 +83,82 @@ class Parser {
       case "component": return this.component(start);
       case "layout": return this.layout(start);
       case "page": return this.page(start);
+      case "scenario": return this.scenario(start);
       default:
         this.s.fail("O005", `Unknown top-level declaration \`${word}\`; expected one of ${TOP_LEVEL.join(", ")}`, start);
+    }
+  }
+
+  // -- scenario ------------------------------------------------------------
+
+  private scenario(start: ReturnType<Scanner["position"]>): ScenarioDecl {
+    this.s.skipInline();
+    const name = this.s.readString();
+    this.s.skipWs();
+    const steps: ScenarioStep[] = [];
+    this.block(() => {
+      for (;;) {
+        this.s.skipWs();
+        if (this.s.peek() === "}" || this.s.eof) return;
+        steps.push(this.scenarioStep());
+      }
+    });
+    return { kind: "scenario", name, steps, span: this.s.spanFrom(start) };
+  }
+
+  /** One step per line: a keyword followed by strings, numbers or bare words. */
+  private scenarioStep(): ScenarioStep {
+    const start = this.s.position();
+    const word = this.s.readIdent();
+    const args: (string | number)[] = [];
+    for (;;) {
+      this.s.skipInline();
+      const c = this.s.peek();
+      if (c === "" || c === "\n" || c === "}" || c === ";") break;
+      if (c === "/" && this.s.peek(1) === "/") break;
+      if (c === '"' || c === "'") args.push(this.s.readString());
+      else if (/[-0-9.]/.test(c)) {
+        const raw = this.s.readRaw(" \n}", true);
+        if (!NUMBER.test(raw)) this.s.fail("O116", `Expected a number in \`${word}\` step, got \`${raw}\``, start);
+        args.push(Number(raw));
+      } else if (this.s.isIdentStart(c)) args.push(this.s.readIdent());
+      else this.s.fail("O116", `Unexpected \`${c}\` in \`${word}\` step`, start);
+    }
+    this.s.eat(";");
+    const span = this.s.spanFrom(start);
+    const str = (i: number, what: string): string => {
+      const v = args[i];
+      if (typeof v !== "string") this.s.fail("O116", `\`${word}\` needs ${what}`, start);
+      return v;
+    };
+    const num = (i: number, what: string): number => {
+      const v = args[i];
+      if (typeof v !== "number") this.s.fail("O116", `\`${word}\` needs ${what}`, start);
+      return v;
+    };
+    switch (word) {
+      case "visit": return { kind: "visit", path: str(0, "a path"), span };
+      case "click": return { kind: "click", target: str(0, "a target address"), span };
+      case "fill": return { kind: "fill", target: str(0, "a target address"), value: str(1, "a value"), span };
+      case "submit": return { kind: "submit", target: str(0, "a target address"), span };
+      case "press": return { kind: "press", key: str(0, "a key name"), span };
+      case "wait": return { kind: "wait", ms: num(0, "a number of milliseconds"), span };
+      case "screenshot": return { kind: "screenshot", name: str(0, "a name"), span };
+      case "expect": {
+        const target = str(0, "a target address");
+        const check = args[1];
+        const checks = ["text", "contains", "visible", "hidden", "count", "attr"] as const;
+        if (typeof check !== "string" || !(checks as readonly string[]).includes(check)) {
+          this.s.fail("O116", `\`expect\` needs one of ${checks.join(", ")} after the target`, start);
+        }
+        const kind = check as (typeof checks)[number];
+        if (kind === "visible" || kind === "hidden") return { kind: "expect", target, check: kind, span };
+        if (kind === "count") return { kind: "expect", target, check: kind, value: num(2, "a count"), span };
+        if (kind === "attr") return { kind: "expect", target, check: kind, attr: str(2, "an attribute name"), value: str(3, "an expected value"), span };
+        return { kind: "expect", target, check: kind, value: str(2, "expected text"), span };
+      }
+      default:
+        this.s.fail("O116", `Unknown scenario step \`${word}\`; expected visit, click, fill, submit, press, expect, wait or screenshot`, start);
     }
   }
 

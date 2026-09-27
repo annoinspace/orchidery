@@ -218,12 +218,50 @@ export const LayoutDecl = z.object({
 });
 export type LayoutDecl = z.infer<typeof LayoutDecl>;
 
+// ---------------------------------------------------------------------------
+// Scenarios: tests written in the addressing vocabulary. Ignored by the
+// emitter; run by the devtools scenario runner against the dev server.
+// ---------------------------------------------------------------------------
+
+/** A step target: a full address, or `#id` resolved against the current page. */
+const Target = z.string();
+
+export const ScenarioStep = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("visit"), path: z.string(), ...spanned }),
+  z.object({ kind: z.literal("click"), target: Target, ...spanned }),
+  z.object({ kind: z.literal("fill"), target: Target, value: z.string(), ...spanned }),
+  z.object({ kind: z.literal("submit"), target: Target, ...spanned }),
+  z.object({ kind: z.literal("press"), key: z.string(), ...spanned }),
+  z.object({
+    kind: z.literal("expect"),
+    target: Target,
+    check: z.enum(["text", "contains", "visible", "hidden", "count", "attr"]),
+    /** For text/contains/attr: the expected string. For count: the expected number. */
+    value: z.union([z.string(), z.number()]).optional(),
+    /** For attr: the attribute name. */
+    attr: z.string().optional(),
+    ...spanned,
+  }),
+  z.object({ kind: z.literal("wait"), ms: z.number(), ...spanned }),
+  z.object({ kind: z.literal("screenshot"), name: z.string(), ...spanned }),
+]);
+export type ScenarioStep = z.infer<typeof ScenarioStep>;
+
+export const ScenarioDecl = z.object({
+  kind: z.literal("scenario"),
+  name: z.string(),
+  steps: z.array(ScenarioStep),
+  ...spanned,
+});
+export type ScenarioDecl = z.infer<typeof ScenarioDecl>;
+
 export const Item = z.discriminatedUnion("kind", [
   TokensDecl,
   ImportDecl,
   ComponentDecl,
   PageDecl,
   LayoutDecl,
+  ScenarioDecl,
 ]);
 export type Item = z.infer<typeof Item>;
 

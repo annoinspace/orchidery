@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { Expr, type ComponentDecl, type Document, type Element, type Item, type TokensDecl, type UiNode } from "./ast.js";
-import { findByAddress, isRoot, normalize, requireAddress, rootAddress, walkDocument, type Located } from "./address.js";
+import { Expr, type ComponentDecl, type Document, type Element, type Item, type ScenarioStep, type TokensDecl, type UiNode } from "./ast.js";
+import { findByAddress, findScenario, isRoot, normalize, requireAddress, rootAddress, scenarioAddress, walkDocument, type Located } from "./address.js";
 import { OrchidError, type Diagnostic } from "./diagnostics.js";
 import { parseExpr, parseItem, parseUiSnippet } from "./parser.js";
 import { print } from "./print.js";
@@ -31,6 +31,11 @@ export const GraftOp = z.discriminatedUnion("op", [
   z.object({ op: z.literal("set_token"), path: z.string(), value: z.union([z.string(), z.number()]) }),
   z.object({ op: z.literal("remove_token"), path: z.string() }),
   z.object({ op: z.literal("add_component"), source: z.string().describe("A full `component Name(...) { ... }` declaration") }),
+  z.object({ op: z.literal("add_scenario"), source: z.string().describe("A full `scenario \"name\" { steps }` declaration") }),
+  z.object({ op: z.literal("set_step"), scenario: z.string().describe("Scenario name or `scenario:<name>`"), index: z.number().int(), step: z.string().describe("One step line, e.g. `click \"#toggle\"`") }).describe("Replace a step"),
+  z.object({ op: z.literal("insert_step"), scenario: z.string(), index: z.number().int().optional(), step: z.string() }).describe("Insert a step; appends when index is omitted"),
+  z.object({ op: z.literal("remove_step"), scenario: z.string(), index: z.number().int() }),
+  z.object({ op: z.literal("remove_scenario"), scenario: z.string() }),
 ]);
 export type GraftOp = z.infer<typeof GraftOp>;
 
@@ -86,7 +91,10 @@ export function graft(doc: Document, ops: GraftOp[], opts: GraftOptions = {}): G
   }
 
   const alive = new Set([...walkDocument(next)].map((l) => l.address));
-  for (const item of next.items) if (isRoot(item)) alive.add(rootAddress(item));
+  for (const item of next.items) {
+    if (isRoot(item)) alive.add(rootAddress(item));
+    if (item.kind === "scenario") alive.add(scenarioAddress(item));
+  }
   return { document: next, text: print(next), touched: [...touched].filter((a) => alive.has(a)), diagnostics };
 }
 
@@ -205,7 +213,45 @@ function applyOp(doc: Document, op: GraftOp, touched: Set<string>): void {
       touched.add(`component:${item.name}`);
       return;
     }
+    case "add_scenario": {
+      const item: Item = parseItem(op.source);
+      if (item.kind !== "scenario") fail("O202", "add_scenario needs a `scenario` declaration");
+      if (findScenario(doc, item.name)) fail("O202", `Scenario \`${item.name}\` already exists`);
+      doc.items.push(item);
+      touched.add(scenarioAddress(item));
+      return;
+    }
+    case "remove_scenario": {
+      const s = findScenario(doc, op.scenario);
+      if (!s) fail("O201", `No scenario \`${op.scenario}\``);
+      doc.items.splice(doc.items.indexOf(s), 1);
+      return;
+    }
+    case "set_step":
+    case "insert_step":
+    case "remove_step": {
+      const s = findScenario(doc, op.scenario);
+      if (!s) fail("O201", `No scenario \`${op.scenario}\``);
+      if (op.op === "insert_step") {
+        const at = op.index ?? s.steps.length;
+        s.steps.splice(Math.min(at, s.steps.length), 0, parseStep(op.step));
+      } else {
+        if (op.index < 0 || op.index >= s.steps.length) fail("O201", `Scenario \`${s.name}\` has no step ${op.index}`);
+        if (op.op === "remove_step") s.steps.splice(op.index, 1);
+        else s.steps[op.index] = parseStep(op.step);
+      }
+      touched.add(scenarioAddress(s));
+      return;
+    }
   }
+}
+
+function parseStep(line: string): ScenarioStep {
+  const item = parseItem(`scenario "_" {\n${line}\n}`);
+  if (item.kind !== "scenario" || item.steps.length !== 1) fail("O202", `Expected exactly one scenario step, got \`${line}\``);
+  const step = item.steps[0]!;
+  delete step.span;
+  return step;
 }
 
 function requireElement(doc: Document, address: string): Element {

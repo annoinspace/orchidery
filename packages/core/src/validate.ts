@@ -1,5 +1,5 @@
 import { isEventProp, type Document, type Expr, type Prop, type Span, type UiNode } from "./ast.js";
-import { rootAddress, rootUi, type Root, walk } from "./address.js";
+import { isRoot, rootAddress, rootUi, type Root, walk } from "./address.js";
 import type { Diagnostic } from "./diagnostics.js";
 import { PRIMITIVES, allowedProps, isPrimitive } from "./primitives.js";
 import {
@@ -45,7 +45,46 @@ export function validate(program: Program): Diagnostic[] {
       validateRoot(item, { doc, imports, tokens, namespaces, components, out });
     }
   }
+
+  validateScenarios(program, out);
   return out;
+}
+
+/** Scenarios: unique names (O117), start with visit (O119), targets resolve (O118). */
+function validateScenarios(program: Program, out: Diagnostic[]): void {
+  const addresses = new Set<string>();
+  const ids = new Set<string>();
+  for (const doc of program.documents) {
+    for (const item of doc.items) {
+      if (!isRoot(item)) continue;
+      addresses.add(rootAddress(item));
+      for (const loc of walk(item)) {
+        addresses.add(loc.address);
+        if (loc.node.kind === "element" && loc.node.id) ids.add(loc.node.id);
+      }
+    }
+  }
+  const seen = new Set<string>();
+  for (const doc of program.documents) {
+    for (const s of doc.items) {
+      if (s.kind !== "scenario") continue;
+      if (seen.has(s.name)) out.push(diag("O117", `Scenario \`${s.name}\` is declared more than once`, doc.file, s.span));
+      seen.add(s.name);
+      if (s.steps[0]?.kind !== "visit") out.push(diag("O119", `Scenario \`${s.name}\` must start with a \`visit\` step`, doc.file, s.steps[0]?.span ?? s.span));
+      for (const step of s.steps) {
+        if (!("target" in step)) continue;
+        const t = step.target.trim();
+        if (t.startsWith("#")) {
+          if (!ids.has(t.slice(1))) {
+            const near = closest(t.slice(1), [...ids]);
+            out.push({ ...diag("O118", `No node with id \`${t}\` in any page`, doc.file, step.span), fix: near ? { description: `Did you mean \`#${near}\`?`, replacement: `#${near}` } : undefined });
+          }
+        } else if (!addresses.has(t.split(">").map((p) => p.trim()).join(" > "))) {
+          out.push(diag("O118", `Address \`${t}\` does not exist`, doc.file, step.span));
+        }
+      }
+    }
+  }
 }
 
 interface Ctx {
