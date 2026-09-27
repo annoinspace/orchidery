@@ -8,3 +8,5 @@ export * from "./address.js";
 export * from "./primitives.js";
 export * from "./program.js";
 export { validate, closest, splitArgs } from "./validate.js";
+export { emit, type EmitOptions, type EmitResult, type MapEntry } from "./emit/index.js";
+export { routeDir, paramsType, relativeImport, identifiers } from "./emit/util.js";
