@@ -57,6 +57,7 @@ page "/todos/[id]" {
 | `component Name(params) { ui }` | A reusable component. `children` as a param makes it accept children. Untyped params are `any`. |
 | `layout "/route" { load? meta? ui }` | A Next.js layout. The root layout (`"/"`) is wrapped in `<html><body>` for you. Must render `children`. |
 | `page "/route" { load? action* meta? ui }` | A Next.js page. Routes use Next segment syntax: `/todos/[id]`, `/docs/[...slug]`. |
+| `scenario "name" { steps }` | A test in the addressing vocabulary. See Scenarios below. Ignored by the compiler. |
 
 ### Inside a page
 
@@ -131,7 +132,51 @@ For `page "/todos/[id]"`:
 | `app/layout.tsx` | From `layout "/"`, or a generated default. |
 
 In development every primitive gets a `data-orchid` stamp and `.orchidery/map.json` maps
-stamps back to addresses, files and line ranges. Production builds carry no stamps.
+stamps back to addresses, files and line ranges. Production builds carry no stamps unless
+`orchidery.config.json` sets `"stamps": "always"`, which keeps them and publishes the map at
+`public/.orchidery/map.json` so an operating agent can resolve addresses on the live site.
+
+## Scenarios
+
+A scenario is a test written in the addressing vocabulary. It lives in a `.orchid` file, so
+an agent can add or edit one with a graft, and it runs against the dev server with
+`orchidery scenario` or the `orchid_scenario_run` tool.
+
+```orchid
+scenario "toggle a todo" {
+  visit "/todos/b2"
+  expect "#toggle" text "Mark done"
+  click "#toggle"
+  expect "#toggle" text "Mark open"
+  fill "page:/ > #add > Stack[0] > Input[0]" "Buy milk"
+  submit "#add"
+  expect "page:/ > Card[0] > for[0] > Stack[0]" count 4
+  screenshot "after-add"
+}
+```
+
+| Step | Meaning |
+| --- | --- |
+| `visit "/path"` | Open a route. Must be the first step. |
+| `click "<target>"` | Click a node. |
+| `fill "<target>" "value"` | Type into an input. |
+| `submit "<target>"` | Submit a form (or the form inside the target). |
+| `press "Key"` | Press a key, e.g. `"Enter"` or `"Escape"`. |
+| `expect "<target>" text "..."` | Exact trimmed text. |
+| `expect "<target>" contains "..."` | Substring. |
+| `expect "<target>" visible` / `hidden` | Visibility. |
+| `expect "<target>" count N` | Number of rendered matches. |
+| `expect "<target>" attr "name" "value"` | An attribute equals or (for space-separated values like `class`) includes the value. |
+| `wait N` | Milliseconds. |
+| `screenshot "name"` | Saves `.orchidery/scenarios/<scenario>/<name>.png`. |
+
+A target is a full address, or `#id` which resolves against the page the scenario is
+currently on. The validator checks every target exists somewhere in the project (O118)
+and suggests the closest id when it does not. Expectations retry until the step timeout.
+A failing step records its error and a full-page screenshot.
+
+Addresses: `scenario:<name>`. Graft ops: `add_scenario`, `set_step`, `insert_step`,
+`remove_step`, `remove_scenario`.
 
 ## Formatting
 

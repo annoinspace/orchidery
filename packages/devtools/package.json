@@ -7,14 +7,22 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
-    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" }
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc -p . && tsc --noEmit -p tsconfig.overlay.json && esbuild src/overlay/index.ts --bundle --format=iife --minify --target=es2020 --outfile=dist/overlay.js --log-level=warning"
   },
   "dependencies": {
-    "diff": "^9.0.0"
+    "diff": "^9.0.0",
+    "@orchidery/core": "workspace:*",
+    "playwright-core": "^1.63.0",
+    "axe-core": "^4.13.0"
   },
   "devDependencies": {
     "esbuild": "^0.28.2",

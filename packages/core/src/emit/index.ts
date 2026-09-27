@@ -9,8 +9,10 @@ import { emitTokensCss, emitTokensTs } from "./tokens.js";
 import { identifiers, paramsType, relativeImport, routeDir, Writer } from "./util.js";
 
 export interface EmitOptions {
-  /** Stamp elements with data-orchid and produce the address map. */
+  /** Development build: stamp elements with data-orchid, produce the address map and load the devtools overlay. */
   dev?: boolean;
+  /** Keep stamps and the map without the devtools loader. Used for `stamps: "always"` production builds. */
+  stamps?: boolean;
   /** Module specifier for the runtime. Default `@orchidery/runtime`. */
   runtime?: string;
   /** Where the devtools overlay is served from (dev only). */
@@ -42,6 +44,7 @@ export function emit(program: Program, opts: EmitOptions = {}): EmitResult {
   if (diagnostics.some((d) => d.severity === "error")) return { files, map, diagnostics };
 
   const dev = opts.dev ?? false;
+  const stamp = dev || (opts.stamps ?? false);
   const runtime = opts.runtime ?? "@orchidery/runtime";
   const tokens = tokensOf(program);
   const tokenPaths = new Set(tokens.map((t) => t.path));
@@ -51,7 +54,7 @@ export function emit(program: Program, opts: EmitOptions = {}): EmitResult {
   files[`${GEN}/tokens.css`] = emitTokensCss(tokens);
   files[`${GEN}/tokens.ts`] = emitTokensTs(tokens);
 
-  const shared = { dev, runtime, tokenPaths, componentNames, opts };
+  const shared = { dev, stamp, runtime, tokenPaths, componentNames, opts };
 
   for (const doc of program.documents) {
     const importNames = importedNames(doc);
@@ -74,7 +77,10 @@ export function emit(program: Program, opts: EmitOptions = {}): EmitResult {
 }
 
 interface Shared {
+  /** Development build: load the devtools overlay. */
   dev: boolean;
+  /** Stamp elements with data-orchid (dev, or `stamps: "always"`). */
+  stamp: boolean;
   runtime: string;
   tokenPaths: Set<string>;
   componentNames: Set<string>;
@@ -85,7 +91,7 @@ interface Shared {
 function ctxFor(root: PageDecl | LayoutDecl | ComponentDecl, s: Shared, dataNames: Set<string>, map: Record<string, MapEntry>, doc: Document, extractIslands: boolean): JsxContext {
   return {
     rootAddress: rootAddress(root),
-    dev: s.dev,
+    dev: s.stamp,
     onStamp: (address, node) => {
       map[stamp(address)] = { address, file: doc.file, range: node.span, name: node.kind === "element" ? node.name : node.kind };
     },

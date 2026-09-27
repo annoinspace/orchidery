@@ -57,7 +57,7 @@ describe("mcp server", () => {
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual([
       "orchid_annotation", "orchid_annotation_update", "orchid_annotations", "orchid_compile", "orchid_diff", "orchid_explain",
-      "orchid_format", "orchid_get_node", "orchid_graft", "orchid_project", "orchid_read", "orchid_schema", "orchid_validate",
+      "orchid_format", "orchid_get_node", "orchid_graft", "orchid_preview", "orchid_project", "orchid_read", "orchid_scenario_run", "orchid_scenarios", "orchid_schema", "orchid_validate",
     ]);
   });
 

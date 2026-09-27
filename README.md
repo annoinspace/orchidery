@@ -45,6 +45,9 @@ walls of text. Orchidery gives an agent what it needs to be reliable instead of 
 - **Coded diagnostics with fixes.** `O104 Unknown prop \`colour\` on Text. Did you mean \`color\`?`
 - **Edit mode.** In dev, click a node or draw around a region, type a note. It lands in a
   queue any MCP client can work.
+- **The agent can look.** `orchid_preview` returns a screenshot, the box of every addressable
+  node, console errors and an axe-core accessibility report. `scenario` blocks are tests
+  written with addresses, runnable by the agent after every change.
 
 ## Try it
 
@@ -85,6 +88,8 @@ safe to gitignore or commit, your choice.
 | `orchidery check` | Parse and validate, print diagnostics |
 | `orchidery format` | Rewrite sources in canonical form |
 | `orchidery tend` | List open annotations |
+| `orchidery scenario [name]` | Run scenarios against the dev server |
+| `orchidery preview <route>` | Screenshot a route and report accessibility issues |
 | `orchidery mcp` | Run the MCP server over stdio |
 | `orchidery init` | Scaffold a project |
 

@@ -10,6 +10,7 @@ import {
   emit,
   explain,
   findByAddress,
+  findScenario,
   graft,
   graftOpsJsonSchema,
   GraftOp,
@@ -31,10 +32,68 @@ import {
   type Root,
   type UiNode,
 } from "@orchidery/core";
-import { Store } from "@orchidery/devtools";
+import { BrowserPool, loadScenarios, preview, runScenario, Store, type PreviewRequest, type PreviewResult, type ScenarioResult } from "@orchidery/devtools";
 
 export interface ServeOptions {
   root: string;
+}
+
+/**
+ * Preview and scenarios need a browser. When `orchidery dev` is running, its
+ * devtools server already has one and knows the app URL, so use it over HTTP;
+ * otherwise fall back to an in-process browser against the configured appUrl.
+ */
+class Browsing {
+  private pool: BrowserPool | undefined;
+  constructor(private root: string) {}
+
+  private devtoolsUrl(): string {
+    const c = loadConfig(this.root);
+    return c.devtoolsUrl ?? `http://localhost:${c.devtoolsPort}`;
+  }
+
+  private async devtoolsAlive(): Promise<{ appUrl: string } | undefined> {
+    try {
+      const r = await fetch(`${this.devtoolsUrl()}/health`, { signal: AbortSignal.timeout(1500) });
+      if (!r.ok) return undefined;
+      return (await r.json()) as { appUrl: string };
+    } catch {
+      return undefined;
+    }
+  }
+
+  private deps(appUrl: string) {
+    const config = loadConfig(this.root);
+    this.pool ??= new BrowserPool();
+    return { pool: this.pool, store: new Store(this.root, config.src), root: this.root, config, appUrl };
+  }
+
+  async preview(req: PreviewRequest): Promise<PreviewResult> {
+    const alive = await this.devtoolsAlive();
+    if (alive) {
+      const r = await fetch(`${this.devtoolsUrl()}/preview`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(req) });
+      const body = (await r.json()) as PreviewResult | { error: string };
+      if (!r.ok) throw new Error((body as { error: string }).error);
+      return body as PreviewResult;
+    }
+    const config = loadConfig(this.root);
+    return preview(req, this.deps(config.appUrl ?? "http://localhost:3000"));
+  }
+
+  async scenarios(name?: string, timeout?: number): Promise<ScenarioResult[]> {
+    const alive = await this.devtoolsAlive();
+    if (alive) {
+      const r = await fetch(`${this.devtoolsUrl()}/scenarios/run`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name, timeout }) });
+      const body = (await r.json()) as ScenarioResult[] | { error: string };
+      if (!r.ok) throw new Error((body as { error: string }).error);
+      return body as ScenarioResult[];
+    }
+    const config = loadConfig(this.root);
+    const deps = { ...this.deps(config.appUrl ?? "http://localhost:3000"), timeout };
+    const out: ScenarioResult[] = [];
+    for (const s of loadScenarios(this.root, config, name)) out.push(await runScenario(s, deps));
+    return out;
+  }
 }
 
 /** Run the server over stdio. */
@@ -222,6 +281,68 @@ export function createServer(opts: ServeOptions): McpServer {
     },
   );
 
+  const browsing = new Browsing(root);
+
+  server.registerTool(
+    "orchid_preview",
+    {
+      description:
+        "Look at a route of the running app (needs `orchidery dev`). Returns a screenshot, the page title, console errors, an accessibility report, and `boxes`: the viewport rectangle of every addressable node so you can relate what you see to what you can graft. Pass `source` to preview an unsaved .orchid document's first page instead of a route. Use this before marking an annotation done.",
+      inputSchema: {
+        route: z.string().optional().describe("Route path such as /todos/b2"),
+        source: z.string().optional().describe("A full .orchid document; its first page is rendered under a temporary route"),
+        viewport: z.object({ width: z.number().int(), height: z.number().int() }).optional(),
+        dark: z.boolean().optional(),
+        fullPage: z.boolean().optional(),
+        a11y: z.boolean().optional().describe("Run axe-core (default true)"),
+      },
+    },
+    async (req) => {
+      try {
+        if (!req.route && !req.source) return fail(new Error("Pass route or source"));
+        const r = await browsing.preview(req);
+        const { screenshot, html, ...rest } = r;
+        return {
+          content: [
+            { type: "text" as const, text: JSON.stringify({ ...rest, htmlLength: html.length }, null, 2) },
+            { type: "image" as const, data: screenshot, mimeType: "image/png" },
+          ],
+        };
+      } catch (e) {
+        return fail(e);
+      }
+    },
+  );
+
+  server.registerTool(
+    "orchid_scenarios",
+    { description: "List scenarios declared in the project with their steps.", inputSchema: {} },
+    async () => {
+      try {
+        const { program } = load();
+        return text(program.documents.flatMap((d) => d.items.filter((i) => i.kind === "scenario").map((s) => ({ address: `scenario:${s.name}`, file: d.file, steps: s.steps.length }))));
+      } catch (e) {
+        return fail(e);
+      }
+    },
+  );
+
+  server.registerTool(
+    "orchid_scenario_run",
+    {
+      description: "Run one scenario (by name) or all of them against the running app. Each step reports pass/fail; a failed step includes the error and a screenshot path. Run the relevant scenarios after a graft to check nothing broke.",
+      inputSchema: { name: z.string().optional(), timeout: z.number().int().optional().describe("Per-step timeout in ms (default 10000)") },
+    },
+    async ({ name, timeout }) => {
+      try {
+        const results = await browsing.scenarios(name, timeout);
+        return text({ ok: results.every((r) => r.ok), results });
+      } catch (e) {
+        return fail(e);
+      }
+    },
+  );
+
   server.registerTool(
     "orchid_annotations",
     { description: "List annotations the human left in edit mode. Defaults to open ones (pending and in_progress).", inputSchema: { status: z.enum(["pending", "in_progress", "done", "rejected", "all"]).optional() } },
@@ -348,8 +469,20 @@ function resolveFile(program: Program, file: string | undefined, ops: GraftOp[])
   if (file) return file;
   for (const op of ops) {
     const address = "address" in op ? op.address : undefined;
-    if (!address) continue;
-    for (const doc of program.documents) if (findByAddress(doc, address) || rootItem(doc, address)) return doc.file!;
+    if (address) {
+      for (const doc of program.documents) if (findByAddress(doc, address) || rootItem(doc, address)) return doc.file!;
+    }
+    const scenario = "scenario" in op ? op.scenario : undefined;
+    if (scenario) {
+      for (const doc of program.documents) if (findScenario(doc, scenario)) return doc.file!;
+    }
+  }
+  // New scenarios go where the other scenarios live.
+  if (ops.some((op) => op.op === "add_scenario")) {
+    const withScenarios = program.documents
+      .map((d) => ({ d, n: d.items.filter((i) => i.kind === "scenario").length }))
+      .sort((a, b) => b.n - a.n)[0];
+    if (withScenarios && withScenarios.n > 0) return withScenarios.d.file!;
   }
   const withTokens = program.documents.find((d) => d.items.some((i) => i.kind === "tokens"));
   if (withTokens?.file) return withTokens.file;

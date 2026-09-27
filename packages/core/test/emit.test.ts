@@ -88,3 +88,13 @@ page "/" { action go(id: string) { await db.x(id)
     expect(r.diagnostics[0]?.code).toBe("O102");
   });
 });
+
+describe("stamps: always", () => {
+  it("keeps stamps and the map without the devtools loader", () => {
+    const r = emit(program(), { stamps: true });
+    const all = Object.values(r.files).join("\n");
+    expect(all).toContain("data-orchid");
+    expect(all).not.toContain("OrchideryDevTools");
+    expect(Object.values(r.map).map((e) => e.address)).toContain("page:/todos/[id] > #done");
+  });
+});

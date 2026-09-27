@@ -37,8 +37,30 @@ orchid_annotation { id }                -> note, targets with source, common anc
 orchid_annotation_update { id, status: "in_progress" }
 orchid_get_node ...                     -> look around if the targets are not enough
 orchid_graft { ops: [...] }             -> make the change
+orchid_preview { route }                -> look at the result before claiming it is done
+orchid_scenario_run { name? }           -> check nothing else broke
 orchid_annotation_update { id, status: "done", summary: "..." }
 ```
+
+## Look before you mark done
+
+Never close an annotation on the strength of a graft alone. `orchid_preview` renders the
+route in a headless browser (the dev server must be running) and returns:
+
+- a screenshot, as an image you can read
+- `boxes`: the viewport rectangle of every addressable node, so you can check the thing you
+  changed is where the human pointed
+- `errors`: console errors and failed requests
+- `a11y`: axe-core violations, each with the address of the offending node
+
+Pass `source` instead of `route` to preview a document you have not written yet: it is
+compiled under a temporary route and removed afterwards. Use that to try two options and
+show the human the better one.
+
+`orchid_scenario_run` runs the project's scenarios (tests written with addresses). Run the
+ones that touch the page you changed. If there is no scenario for the behaviour you just
+built, add one with `add_scenario` so the next agent has it. A scenario that fails after
+your graft is your regression to fix, not a flake.
 
 The screenshot shows what the human circled. Their targets are the outermost stamped
 elements mostly inside the region; the common ancestor is the deepest node above all of
@@ -60,6 +82,9 @@ card and the targets are its rows.
 | `wrap_node { address, name, id?, props? }` | Wrap in a new element, e.g. a `Stack`. |
 | `add_token` / `set_token` / `remove_token` | Design tokens. |
 | `add_component { source }` | A whole `component Name(...) { ... }` declaration. |
+| `add_scenario { source }` | A whole `scenario "name" { ... }` declaration. |
+| `set_step` / `insert_step` / `remove_step { scenario, index, step? }` | Edit one line of a scenario. `step` is a line like `click "#toggle"`. |
+| `remove_scenario { scenario }` | |
 
 Ops apply in order, each seeing the result of the previous one. Everything is validated at
 the end and nothing is written unless the whole batch is valid.

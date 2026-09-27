@@ -15,9 +15,17 @@ export interface ProjectConfig {
   devtoolsPort: number;
   /** Where the browser loads the overlay from. Defaults to http://localhost:<devtoolsPort>. */
   devtoolsUrl?: string;
+  /** Base URL of the Next.js dev server, used by preview and scenarios. `orchidery dev` sets it from its port. */
+  appUrl?: string;
+  /**
+   * When to stamp elements with data-orchid. `dev` (default) stamps development
+   * builds only. `always` keeps stamps in production and publishes the address
+   * map at public/.orchidery/map.json so operating agents can resolve addresses.
+   */
+  stamps: "dev" | "always";
 }
 
-export const DEFAULT_CONFIG: ProjectConfig = { src: "orchid", out: "app", devtoolsPort: 4747 };
+export const DEFAULT_CONFIG: ProjectConfig = { src: "orchid", out: "app", devtoolsPort: 4747, stamps: "dev" };
 
 export function loadConfig(root: string): ProjectConfig {
   const p = join(root, "orchidery.config.json");
@@ -85,7 +93,7 @@ export function compileProject(root: string, config: ProjectConfig, opts: EmitOp
   const result: CompileResult = { written: [], removed: [], diagnostics, map: {} };
   if (diagnostics.length) return result;
 
-  const emitted = emit(program, { devtoolsUrl: config.devtoolsUrl, ...opts });
+  const emitted = emit(program, { devtoolsUrl: config.devtoolsUrl, stamps: config.stamps === "always", ...opts });
   result.diagnostics = emitted.diagnostics;
   result.map = emitted.map;
   if (emitted.diagnostics.some((d) => d.severity === "error")) return result;
@@ -116,6 +124,14 @@ export function compileProject(root: string, config: ProjectConfig, opts: EmitOp
   }
   writeFileSync(manifestPath, JSON.stringify(current, null, 2));
   writeFileSync(join(gen, "map.json"), JSON.stringify(emitted.map, null, 2));
+  // With stamps: "always", operating agents resolve addresses on the live site from the public map.
+  const publicMap = join(root, "public", ".orchidery", "map.json");
+  if (config.stamps === "always") {
+    mkdirSync(dirname(publicMap), { recursive: true });
+    writeFileSync(publicMap, JSON.stringify(emitted.map));
+  } else if (existsSync(publicMap)) {
+    rmSync(publicMap);
+  }
   return result;
 }
 

@@ -54,6 +54,10 @@ export const DIAGNOSTIC_DOCS: Record<string, { title: string; explanation: strin
   O112: { title: "Unknown prop on component", explanation: "The prop is not one of the component's declared parameters." },
   O113: { title: "Duplicate prop", explanation: "The same prop is given twice on one element." },
   O114: { title: "Slot outside component or layout", explanation: "`children` can only be rendered inside a `component` or `layout` body." },
+  O116: { title: "Invalid scenario step", explanation: "Scenario steps are `visit`, `click`, `fill`, `submit`, `press`, `expect`, `wait` and `screenshot`, each with quoted string arguments and numbers where required." },
+  O117: { title: "Duplicate scenario", explanation: "Two scenarios share a name. Names are how scenarios are addressed and run, so they must be unique across the project." },
+  O118: { title: "Scenario target not found", explanation: "A step names an address that no page, layout or component declares. `#id` targets must exist in some page; full addresses must resolve." },
+  O119: { title: "Scenario must start with visit", explanation: "The first step of a scenario has to be `visit` with a path so later steps have a page to act on." },
 
   // Graft: O2xx
   O201: { title: "Address not found", explanation: "No node matches the given address in this document." },

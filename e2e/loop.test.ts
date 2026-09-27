@@ -19,6 +19,8 @@ const APP = `http://localhost:${NEXT_PORT}`;
 const DEVTOOLS = "http://localhost:4747";
 const sourcePath = join(root, "orchid/todos.orchid");
 const originalSource = readFileSync(sourcePath, "utf8");
+const scenarioPath = join(root, "orchid/scenarios.orchid");
+const originalScenarios = readFileSync(scenarioPath, "utf8");
 
 let dev: ChildProcess;
 let browser: Browser;
@@ -55,6 +57,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   writeFileSync(sourcePath, originalSource);
+  writeFileSync(scenarioPath, originalScenarios);
   await browser?.close();
   dev?.kill("SIGTERM");
   await new Promise((r) => setTimeout(r, 500));
@@ -132,4 +135,69 @@ describe("edit mode -> annotation -> graft -> reload", () => {
     expect((diff.content as { text: string }[])[0]!.text).toContain('variant: "secondary"');
     await page.locator("orchidery-devtools .pin.done").waitFor({ timeout: 10_000 });
   });
+
+  it("lets the agent look at its work with orchid_preview", async () => {
+    const client = await mcp();
+    const res = await client.callTool({ name: "orchid_preview", arguments: { route: "/todos/b2" } });
+    expect(res.isError).toBeFalsy();
+    const parts = res.content as { type: string; text?: string; mimeType?: string; data?: string }[];
+    const info = JSON.parse(parts[0]!.text!);
+    expect(info.title).toBe("Orchidery todos");
+    expect(info.boxes["page:/todos/[id] > #toggle"].w).toBeGreaterThan(50);
+    expect(info.errors).toEqual([]);
+    expect(info.a11y).toBeDefined();
+    expect(parts[1]).toMatchObject({ type: "image", mimeType: "image/png" });
+    expect(Buffer.from(parts[1]!.data!, "base64").length).toBeGreaterThan(5000);
+  });
+
+  it("previews an unsaved source under a temporary route and cleans up", async () => {
+    const client = await mcp();
+    const source = `page "/scratch" {\n  ui {\n    Card(title: "Scratch") {\n      Text#hello { "Hello from a preview" }\n    }\n  }\n}\n`;
+    const res = await client.callTool({ name: "orchid_preview", arguments: { source, a11y: false } });
+    expect(res.isError).toBeFalsy();
+    const info = JSON.parse((res.content as { text: string }[])[0]!.text);
+    const helloBox = Object.entries(info.boxes).find(([k]) => k.endsWith(" > #hello"));
+    expect(helloBox).toBeDefined();
+    expect(info.url).toContain("/orchidery-preview/");
+    expect(existsSync(join(root, "app/orchidery-preview"))).toBe(false);
+  });
+
+  it("runs the project's scenarios through orchid_scenario_run", async () => {
+    const client = await mcp();
+    const res = await client.callTool({ name: "orchid_scenario_run", arguments: { name: "toggle a todo" } });
+    const out = JSON.parse((res.content as { text: string }[])[0]!.text);
+    expect(out.results[0].steps.map((s: { ok: boolean }) => s.ok)).toEqual([true, true, true, true, true, true]);
+    expect(out.ok).toBe(true);
+
+    const all = await client.callTool({ name: "orchid_scenario_run", arguments: {} });
+    const outAll = JSON.parse((all.content as { text: string }[])[0]!.text);
+    expect(outAll.results.map((r: { name: string; ok: boolean }) => [r.name, r.ok])).toEqual([["toggle a todo", true], ["add a todo", true]]);
+    expect(existsSync(join(root, ".orchidery/scenarios/add-a-todo/after-add.png"))).toBe(true);
+  });
+
+  it("reports a failing step with an error and a screenshot", async () => {
+    const client = await mcp();
+    await client.callTool({
+      name: "orchid_graft",
+      arguments: { ops: [{ op: "add_scenario", source: `scenario "doomed" {\n visit "/todos/b2"\n expect "#toggle" text "Nope" }` }] },
+    });
+    try {
+      const res = await client.callTool({ name: "orchid_scenario_run", arguments: { name: "doomed", timeout: 1500 } });
+      const out = JSON.parse((res.content as { text: string }[])[0]!.text);
+      expect(out.ok).toBe(false);
+      const failed = out.results[0].steps[1];
+      expect(failed.ok).toBe(false);
+      expect(failed.error).toContain('expected text "Nope"');
+      expect(existsSync(join(root, failed.screenshot))).toBe(true);
+    } finally {
+      await client.callTool({ name: "orchid_graft", arguments: { file: "orchid/scenarios.orchid", ops: [{ op: "remove_scenario", scenario: "doomed" }] } });
+    }
+  });
 });
+
+async function mcp(): Promise<Client> {
+  const client = new Client({ name: "e2e", version: "0" });
+  const [a, b] = InMemoryTransport.createLinkedPair();
+  await Promise.all([createServer({ root }).connect(a), client.connect(b)]);
+  return client;
+}

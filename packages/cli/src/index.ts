@@ -1,6 +1,6 @@
 import { Command } from "commander";
 import { existsSync, mkdirSync, readFileSync, watch, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { spawn } from "node:child_process";
 import {
   compileProject,
@@ -12,7 +12,7 @@ import {
   validate,
   type Diagnostic,
 } from "@orchidery/core";
-import { createDevtoolsServer, Store } from "@orchidery/devtools";
+import { BrowserPool, createDevtoolsServer, loadScenarios, preview, runScenario, Store } from "@orchidery/devtools";
 
 const c = {
   dim: (s: string) => `\x1b[2m${s}\x1b[0m`,
@@ -92,7 +92,8 @@ export async function run(argv: string[]): Promise<void> {
       };
       build();
 
-      const devtools = createDevtoolsServer({ root: r, srcDir: config.src, port: config.devtoolsPort, log: (m) => console.log(`${tag} ${m}`) });
+      const appUrl = config.appUrl ?? `http://localhost:${o.port}`;
+      const devtools = createDevtoolsServer({ root: r, srcDir: config.src, port: config.devtoolsPort, appUrl, log: (m) => console.log(`${tag} ${m}`) });
       const port = await devtools.listen();
       console.log(`${tag} devtools on http://localhost:${port}  ${c.dim("(Alt+Shift+E toggles edit mode in the app)")}`);
 
@@ -110,10 +111,71 @@ export async function run(argv: string[]): Promise<void> {
         stdio: "inherit",
         env: { ...process.env, NEXT_PUBLIC_ORCHIDERY_DEVTOOLS_URL: url },
       });
-      const stop = () => { child.kill("SIGTERM"); devtools.server.close(); process.exit(0); };
+      const stop = () => { child.kill("SIGTERM"); void devtools.close().finally(() => process.exit(0)); };
       process.on("SIGINT", stop);
       process.on("SIGTERM", stop);
-      child.on("exit", (code) => { devtools.server.close(); process.exit(code ?? 0); });
+      child.on("exit", (code) => { void devtools.close().finally(() => process.exit(code ?? 0)); });
+    });
+
+  program
+    .command("scenario [name]")
+    .description("run scenarios against the running dev server (all of them when no name is given)")
+    .option("--app <url>", "base URL of the running app (default: config appUrl or http://localhost:3000)")
+    .option("--timeout <ms>", "per-step timeout", "10000")
+    .action(async (name: string | undefined, o: { app?: string; timeout: string }) => {
+      const r = root();
+      const config = loadConfig(r);
+      const appUrl = o.app ?? config.appUrl ?? "http://localhost:3000";
+      const scenarios = loadScenarios(r, config, name);
+      if (!scenarios.length) {
+        console.log(`${tag} no scenarios. Add one to a .orchid file:\n\n  scenario "smoke" {\n    visit "/"\n    expect "page:/ > Card[0]" visible\n  }`);
+        return;
+      }
+      const pool = new BrowserPool();
+      const store = new Store(r, config.src);
+      let failed = 0;
+      try {
+        for (const s of scenarios) {
+          const res = await runScenario(s, { pool, store, root: r, config, appUrl, timeout: Number(o.timeout) });
+          console.log(`${res.ok ? c.green("pass") : c.red("FAIL")} ${c.bold(res.name)} ${c.dim(`${res.ms}ms`)}`);
+          for (const st of res.steps) {
+            console.log(`  ${st.ok ? c.dim("✓") : c.red("✗")} ${st.step}${st.error ? `\n      ${c.red(st.error)}` : ""}${st.screenshot && !st.ok ? `\n      ${c.dim(st.screenshot)}` : ""}`);
+          }
+          if (!res.ok) failed++;
+        }
+      } finally {
+        await pool.close();
+      }
+      if (failed) process.exit(1);
+    });
+
+  program
+    .command("preview <route>")
+    .description("screenshot a route of the running dev server and report accessibility issues")
+    .option("--app <url>", "base URL of the running app")
+    .option("-o, --out <file>", "where to write the PNG", ".orchidery/preview.png")
+    .option("--full", "capture the whole page, not just the viewport")
+    .action(async (route: string, o: { app?: string; out: string; full?: boolean }) => {
+      const r = root();
+      const config = loadConfig(r);
+      const appUrl = o.app ?? config.appUrl ?? "http://localhost:3000";
+      const pool = new BrowserPool();
+      try {
+        const res = await preview({ route, fullPage: !!o.full }, { pool, store: new Store(r, config.src), root: r, config, appUrl });
+        const out = resolve(r, o.out);
+        mkdirSync(dirname(out), { recursive: true });
+        writeFileSync(out, Buffer.from(res.screenshot, "base64"));
+        console.log(`${tag} ${res.title || res.url} → ${out}`);
+        console.log(`  ${Object.keys(res.boxes).length} addressable node(s)`);
+        for (const e of res.errors) console.log(`  ${c.red("console")} ${e}`);
+        for (const v of res.a11y?.violations ?? []) {
+          console.log(`  ${c.red(v.impact)} ${v.id}: ${v.help}`);
+          for (const n of v.nodes) console.log(`      ${c.dim("→")} ${n.address ?? n.target.join(" ")}`);
+        }
+        if (!res.a11y?.violations.length) console.log(`  ${c.green("no accessibility violations")}`);
+      } finally {
+        await pool.close();
+      }
     });
 
   program

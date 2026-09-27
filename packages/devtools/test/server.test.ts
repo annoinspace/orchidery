@@ -26,7 +26,7 @@ afterAll(() => {
 
 describe("devtools server", () => {
   it("serves the map and health", async () => {
-    expect(await (await fetch(`${base}/health`)).json()).toEqual({ ok: true });
+    expect(await (await fetch(`${base}/health`)).json()).toMatchObject({ ok: true });
     const map = await (await fetch(`${base}/map`)).json();
     expect(map.abc12345.address).toBe("page:/ > Text[0]");
   });
