@@ -171,8 +171,20 @@ describe("edit mode -> annotation -> graft -> reload", () => {
 
     const all = await client.callTool({ name: "orchid_scenario_run", arguments: {} });
     const outAll = JSON.parse((all.content as { text: string }[])[0]!.text);
-    expect(outAll.results.map((r: { name: string; ok: boolean }) => [r.name, r.ok])).toEqual([["toggle a todo", true], ["add a todo", true]]);
+    expect(outAll.results.map((r: { name: string; ok: boolean }) => [r.name, r.ok])).toEqual([["toggle a todo", true], ["add a todo", true], ["assistant renders a fragment", true]]);
     expect(existsSync(join(root, ".orchidery/scenarios/add-a-todo/after-add.png"))).toBe(true);
+  });
+
+  it("renders a runtime fragment on the assistant page without evaluating code", async () => {
+    await page.goto(`${APP}/assistant`, { waitUntil: "networkidle" });
+    const card = page.locator("h3", { hasText: "Where you're at" });
+    await card.waitFor();
+    await expect(page.locator("text=still open").count()).resolves.toBeGreaterThan(0);
+    // The fragment's Link primitives rendered as real Next links.
+    await expect(page.locator('a[href="/todos/b2"]').count()).resolves.toBeGreaterThan(0);
+    const client = await mcp();
+    const bad = await client.callTool({ name: "orchid_fragment_validate", arguments: { source: 'Text { fetch("/x") }' } });
+    expect(JSON.parse((bad.content as { text: string }[])[0]!.text).diagnostics[0].code).toBe("O302");
   });
 
   it("reports a failing step with an error and a screenshot", async () => {

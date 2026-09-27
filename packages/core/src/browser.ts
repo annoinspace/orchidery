@@ -1,14 +1,14 @@
+/**
+ * Browser-safe surface of @orchidery/core: everything except the project
+ * compiler, which touches the filesystem. The runtime's <Orchid> imports
+ * from here so client bundles never see node:fs.
+ */
 export * from "./ast.js";
 export * from "./diagnostics.js";
-export { Scanner } from "./lexer.js";
 export { parse, parseExpr, parseUiSnippet, parseItem, type ParseOptions } from "./parser.js";
-export * from "./graft.js";
-export { print, printUi } from "./print.js";
+export { print, printUi, printStep } from "./print.js";
 export * from "./address.js";
 export * from "./primitives.js";
 export * from "./program.js";
 export { validate, closest, splitArgs } from "./validate.js";
-export { emit, type EmitOptions, type EmitResult, type MapEntry } from "./emit/index.js";
-export { routeDir, paramsType, relativeImport, identifiers } from "./emit/util.js";
-export * from "./project.js";
 export * from "./fragment.js";

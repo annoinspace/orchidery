@@ -11,7 +11,10 @@ import {
   explain,
   findByAddress,
   findScenario,
+  fragmentJsonSchema,
   graft,
+  parseFragment,
+  validateFragment,
   graftOpsJsonSchema,
   GraftOp,
   loadConfig,
@@ -238,6 +241,30 @@ export function createServer(opts: ServeOptions): McpServer {
     "orchid_explain",
     { description: "Explain a diagnostic code such as O104.", inputSchema: { code: z.string() } },
     async ({ code }) => text(explain(code) ?? { error: `Unknown code ${code}` }),
+  );
+
+  server.registerTool(
+    "orchid_fragment_validate",
+    {
+      description:
+        "Validate a runtime fragment: the contents of a ui block meant to be rendered by <Orchid> from model output. Fragments may use primitives, host components, literals, data.* paths, tokens and act(\"name\", ...) calls only. Returns diagnostics and the parsed nodes, plus the JSON Schema when asked.",
+      inputSchema: {
+        source: z.string().describe("Fragment source, e.g. `Stack { Text { data.title } }`"),
+        components: z.array(z.string()).optional().describe("Host component names the fragment may use"),
+        data: z.array(z.string()).optional().describe("Top-level data keys the host provides"),
+        actions: z.array(z.string()).optional().describe("Action names the host handles"),
+        schema: z.boolean().optional().describe("Include fragmentJsonSchema() in the result"),
+      },
+    },
+    async ({ source, components, data, actions, schema }) => {
+      try {
+        const nodes = parseFragment(source);
+        const diagnostics = validateFragment(nodes, { components, data, actions });
+        return text({ ok: diagnostics.length === 0, diagnostics, nodes, schema: schema ? fragmentJsonSchema() : undefined });
+      } catch (e) {
+        return fail(e);
+      }
+    },
   );
 
   server.registerTool(

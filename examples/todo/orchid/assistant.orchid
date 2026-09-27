@@ -1,0 +1,22 @@
+import { db } from "@/lib/db"
+import { summaryFragment } from "@/lib/assistant"
+import { Orchid } from "@orchidery/runtime/fragment"
+
+page "/assistant" {
+  meta {
+    title: "Assistant"
+  }
+
+  load {
+    todos: await db.list()
+    stats: { open: todos.filter((t) => !t.done).length, done: todos.filter((t) => t.done).length, allDone: todos.every((t) => t.done) }
+    fragment: summaryFragment()
+  }
+
+  ui {
+    Card(title: "Assistant") {
+      Text(muted) { "This card is rendered at runtime from a fragment, the way a model's output would be. Nothing in it runs as code." }
+      Orchid#summary(source: fragment, data: { todos, stats })
+    }
+  }
+}

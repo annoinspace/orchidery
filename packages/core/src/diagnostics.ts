@@ -64,6 +64,12 @@ export const DIAGNOSTIC_DOCS: Record<string, { title: string; explanation: strin
   O202: { title: "Invalid graft op", explanation: "The graft operation is malformed or targets a node kind it cannot apply to." },
   O203: { title: "Graft would produce invalid document", explanation: "Applying the ops produced a document that fails validation, so nothing was written." },
   O204: { title: "Invalid address syntax", explanation: "Addresses look like `page:/todos/[id] > ui > Card[0] > #done`." },
+
+  // Fragments (runtime-rendered ui from model output): O3xx
+  O301: { title: "Unknown element in fragment", explanation: "Fragments may use the built-in primitives and the components the host registered. Anything else is rejected before rendering." },
+  O302: { title: "Unsafe expression in fragment", explanation: "Fragment expressions are limited to literals, `data.*` paths, loop variables, tokens, template literals over those, and `act(\"name\", ...)` calls on event props. No other code runs at runtime." },
+  O303: { title: "Unknown fragment action", explanation: "An event prop calls `act(\"name\")` but the host did not register that action name." },
+  O304: { title: "Unknown fragment data path", explanation: "A `data.*` path or bare name does not match the data the host provides. Read host data as `data.<key>`." },
 };
 
 export function explain(code: string): { code: string; title: string; explanation: string } | undefined {

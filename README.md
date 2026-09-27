@@ -45,6 +45,9 @@ walls of text. Orchidery gives an agent what it needs to be reliable instead of 
 - **Coded diagnostics with fixes.** `O104 Unknown prop \`colour\` on Text. Did you mean \`color\`?`
 - **Edit mode.** In dev, click a node or draw around a region, type a note. It lands in a
   queue any MCP client can work.
+- **Generative UI, safely.** A fragment is a ui block rendered at runtime from model output.
+  It may use primitives, tokens, `data.*` paths and `act(...)` calls, nothing else, so the
+  validator is the guardrail and nothing in it runs as code.
 - **The agent can look.** `orchid_preview` returns a screenshot, the box of every addressable
   node, console errors and an axe-core accessibility report. `scenario` blocks are tests
   written with addresses, runnable by the agent after every change.
@@ -108,6 +111,7 @@ safe to gitignore or commit, your choice.
 - [The language](docs/language.md): grammar, props, addresses, what gets emitted
 - [Diagnostics](docs/diagnostics.md): every code and its fix
 - [Agent guide](docs/agent-guide.md): how an agent should tend annotations
+- [Runtime fragments](docs/fragments.md): render model output safely with `<Orchid>`
 
 ## Name
 

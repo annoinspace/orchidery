@@ -45,5 +45,10 @@ Ask `orchid_explain` for any code.
 | `O202` | Invalid graft op | The graft operation is malformed or targets a node kind it cannot apply to. |
 | `O203` | Graft would produce invalid document | Applying the ops produced a document that fails validation, so nothing was written. |
 | `O204` | Invalid address syntax | Addresses look like `page:/todos/[id] > ui > Card[0] > #done`. |
+| **Fragments** | | |
+| `O301` | Unknown element in fragment | Fragments may use the built-in primitives and the components the host registered. Anything else is rejected before rendering. |
+| `O302` | Unsafe expression in fragment | Fragment expressions are limited to literals, `data.*` paths, loop variables, tokens, template literals over those, and `act("name", ...)` calls on event props. No other code runs at runtime. |
+| `O303` | Unknown fragment action | An event prop calls `act("name")` but the host did not register that action name. |
+| `O304` | Unknown fragment data path | A `data.*` path or bare name does not match the data the host provides. Read host data as `data.<key>`. |
 
 Ranges are 1-based lines and columns. `fix.replacement` is the text to put in place of the range.

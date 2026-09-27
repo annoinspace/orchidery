@@ -15,3 +15,10 @@ scenario "add a todo" {
   expect "page:/ > Card[0] > for[0] > Stack[0] > Link[0]" count 4
   screenshot "after-add"
 }
+
+scenario "assistant renders a fragment" {
+  visit "/assistant"
+  expect "page:/assistant > Card[0]" visible
+  expect "page:/assistant > Card[0]" contains "Where you're at"
+  expect "page:/assistant > Card[0]" contains "still open"
+}

@@ -7,12 +7,13 @@ const pkg = (name: string) =>
 export default defineConfig({
   resolve: {
     alias: {
+      "@orchidery/core/browser": fileURLToPath(new URL("./packages/core/src/browser.ts", import.meta.url)),
       "@orchidery/core": pkg("core"),
       "@orchidery/devtools": pkg("devtools"),
       "@orchidery/mcp": pkg("mcp"),
     },
   },
   test: {
-    include: ["packages/*/test/**/*.test.ts"],
+    include: ["packages/*/test/**/*.test.{ts,tsx}"],
   },
 });

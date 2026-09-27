@@ -4,23 +4,47 @@
   "description": "Built-in primitives and token helpers used by code Orchidery emits",
   "type": "module",
   "license": "MIT",
-  "sideEffects": ["*.css"],
+  "sideEffects": [
+    "*.css"
+  ],
   "exports": {
-    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
-    "./devtools": { "types": "./dist/devtools.d.ts", "import": "./dist/devtools.js" },
-    "./styles.css": "./dist/styles.css"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./devtools": {
+      "types": "./dist/devtools.d.ts",
+      "import": "./dist/devtools.js"
+    },
+    "./styles.css": "./dist/styles.css",
+    "./fragment": {
+      "types": "./dist/fragment.d.ts",
+      "import": "./dist/fragment.js"
+    },
+    "./fragment-server": {
+      "types": "./dist/fragment-server.d.ts",
+      "import": "./dist/fragment-server.js"
+    }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc -p . && cp src/styles.css dist/styles.css"
   },
   "peerDependencies": {
     "next": ">=15",
-    "react": ">=19"
+    "react": ">=19",
+    "react-dom": ">=19"
   },
   "devDependencies": {
     "@types/react": "^19.1.0",
     "next": "^16.3.6",
-    "react": "^19.3.0"
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "@types/react-dom": "^19.1.0"
+  },
+  "dependencies": {
+    "@orchidery/core": "workspace:*"
   }
 }
