@@ -2,3 +2,5 @@ app/
 .next/
 next-env.d.ts
 .orchidery/
+AGENTS.md
+CLAUDE.md

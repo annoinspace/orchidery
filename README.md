@@ -2,45 +2,9 @@
 
 **An agent-first UI format that grows on Next.js.**
 
-Orchidery is a small, constrained source format (`.orchid` files) plus the tooling that
-lets a coding agent and a human build a Next.js app together. The human points at the
-running UI and leaves a note. The agent changes the source with structural patches.
-The page reloads. Repeat.
-
-An orchidery is where orchids are grown. Orchids are epiphytes: they grow on another
-plant without harming it. Orchidery grows on Next.js the same way. It compiles to
-ordinary App Router files, so the runtime, the ecosystem and the deploy are unchanged.
-
-## Why
-
-Next.js is hard for agents. Routing lives in magic filenames. The server/client boundary
-is implicit until it breaks at runtime. There are several blessed ways to load data.
-Build errors are walls of text. Every Figma-to-code pass reinvents layout, styling and
-token mapping.
-
-Orchidery fixes the parts that make the agent loop unreliable:
-
-- **One file per route.** Route, data loading, actions and UI tree live together.
-- **Stable addresses.** Every rendered element traces back to a source node such as
-  `page:/todos/[id] > Card[0] > #done`. What you circle and what the agent edits are the
-  same object.
-- **Grafts, not rewrites.** Agents apply structural patch operations that are validated
-  and applied atomically. No half-broken files.
-- **Semantic props and tokens.** "Make it bigger" is a token change, not a pixel fiddle.
-- **Structured diagnostics.** Every error has a code, a range and, where possible, a fix.
-- **Edit mode.** In development the app gets an overlay: click a node or draw around a
-  region, leave a note, and it lands in a queue any MCP client can work through.
-
-## The loop
-
-1. `orchidery dev` starts the compiler, `next dev` and the devtools server.
-2. Press the edit-mode toggle. Click or draw around part of the page. Type a note.
-3. Point Claude Code (or any MCP client) at `@orchidery/mcp` and say
-   "tend the annotations".
-4. The agent reads each annotation with its screenshot and source, grafts the change,
-   marks it done. The page reloads.
-
-## A page
+You point at the running app and leave a note. An agent changes the source. The page
+reloads. Orchidery is the small, constrained format and the tooling that makes that loop
+reliable.
 
 ```orchid
 import { db } from "@/lib/db"
@@ -64,36 +28,97 @@ page "/todos/[id]" {
 }
 ```
 
-That compiles to `app/todos/[id]/page.tsx`, `app/todos/[id]/actions.ts` and a client
-island for the button. The server/client boundary is inferred: anything with an event
-handler becomes an island.
+That compiles to `app/todos/[id]/page.tsx`, a `"use server"` actions module and a client
+island for the button. Ordinary Next.js App Router files, deployable anywhere Next runs.
 
-## Vocabulary
+## Why
 
-- **graft**: apply a structural patch to a node
-- **prune**: remove a node
-- **tend**: work through the annotation queue
-- **grove**: a group of routes sharing a layout
+Next.js is hard for agents. Routing hides in magic filenames, the server/client boundary is
+implicit until it breaks, data loading has several blessed shapes, and build errors are
+walls of text. Orchidery gives an agent what it needs to be reliable instead of lucky:
+
+- **One file per route.** Route, data, actions and UI together.
+- **Stable addresses.** Every rendered element traces back to a node like
+  `page:/todos/[id] > #done`. What you circle and what the agent edits are the same thing.
+- **Grafts, not rewrites.** Edits are structural ops, validated and applied atomically.
+- **Semantic props and tokens.** "Make it bigger" is a token change, not a pixel fiddle.
+- **Coded diagnostics with fixes.** `O104 Unknown prop \`colour\` on Text. Did you mean \`color\`?`
+- **Edit mode.** In dev, click a node or draw around a region, type a note. It lands in a
+  queue any MCP client can work.
+
+## Try it
+
+```sh
+git clone https://github.com/annoinspace/orchidery && cd orchidery
+pnpm install && pnpm build
+cd examples/todo && pnpm dev
+```
+
+Open http://localhost:3000, press **Alt+Shift+E**, draw a box around something and leave a
+note. Then connect an agent:
+
+```sh
+claude mcp add orchidery -- npx orchidery mcp
+```
+
+and ask it to *tend the Orchidery annotations*. It reads each note with its screenshot and
+source, grafts the change, marks it done. The page reloads. `orchidery tend` shows the queue
+from the terminal.
+
+## Add to an existing Next.js app
+
+```sh
+pnpm add orchidery @orchidery/runtime
+npx orchidery init      # creates orchid/home.orchid and orchidery.config.json
+npx orchidery dev       # compiler in watch mode + next dev + devtools
+```
+
+`orchidery build` runs before `next build` in CI. Generated files live in `app/` and are
+safe to gitignore or commit, your choice.
+
+## CLI
+
+| Command | What |
+| --- | --- |
+| `orchidery dev` | Watch `.orchid` files, run `next dev` and the devtools server |
+| `orchidery build [--dev]` | Compile to the app directory |
+| `orchidery check` | Parse and validate, print diagnostics |
+| `orchidery format` | Rewrite sources in canonical form |
+| `orchidery tend` | List open annotations |
+| `orchidery mcp` | Run the MCP server over stdio |
+| `orchidery init` | Scaffold a project |
 
 ## Packages
 
 | Package | What |
 | --- | --- |
+| `orchidery` | The CLI |
 | `@orchidery/core` | Parser, printer, addresses, validator, graft engine, Next.js emitter |
-| `@orchidery/runtime` | The built-in primitives (`Box`, `Stack`, `Text`, ...) and token helpers |
-| `@orchidery/devtools` | The devtools server and the edit-mode overlay |
-| `orchidery` | The CLI: `dev`, `check`, `build`, `format`, `init`, `tend` |
-| `@orchidery/mcp` | The MCP server agents use to validate, compile, graft and tend |
+| `@orchidery/runtime` | Primitives (`Box`, `Stack`, `Text`, `Button`, ...) and token helpers |
+| `@orchidery/devtools` | Devtools server, annotation store, edit-mode overlay |
+| `@orchidery/mcp` | MCP server: `orchid_project`, `orchid_get_node`, `orchid_graft`, `orchid_annotations`, ... |
+
+## Docs
+
+- [The language](docs/language.md): grammar, props, addresses, what gets emitted
+- [Diagnostics](docs/diagnostics.md): every code and its fix
+- [Agent guide](docs/agent-guide.md): how an agent should tend annotations
+
+## Name
+
+An orchidery is where orchids are grown. Orchids are epiphytes: they grow on another plant
+without harming it. Orchidery grows on Next.js the same way.
 
 ## Prior art
 
-Onlook edits plain Next.js apps visually and writes back React. The Vercel toolbar lets
-you comment on previews. `espalier` on npm calls itself an architecture compiler for
-agent-driven development. Orchidery's difference is the constrained source: stable
-addresses, structured grafts and tokens make an agent's changes predictable and
-reviewable rather than best-effort.
+[Onlook](https://onlook.com) edits plain Next.js apps visually and writes back React. The
+Vercel toolbar lets you comment on previews. Orchidery's difference is the constrained
+source: stable addresses, structured grafts and tokens make an agent's changes predictable
+and reviewable.
 
 ## Status
 
-Early. See `docs/language.md` for the grammar, `docs/diagnostics.md` for every error
-code, and `docs/agent-guide.md` for how an agent should work an annotation.
+Early and moving. Deferred to later: accept/revert in the overlay, Figma frame attachment,
+client `state` blocks, an LSP.
+
+MIT.

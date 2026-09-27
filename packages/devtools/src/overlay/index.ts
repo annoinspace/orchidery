@@ -125,9 +125,10 @@ function boot(): void {
   const nameOf = (el: Element) => map[stampOf(el)]?.name ?? el.tagName.toLowerCase();
 
   function stampedAt(x: number, y: number): Element | null {
+    const prev = canvas.style.pointerEvents;
     canvas.style.pointerEvents = "none";
     const els = document.elementsFromPoint(x, y);
-    if (tool !== "select") canvas.style.pointerEvents = "";
+    canvas.style.pointerEvents = prev;
     for (const el of els) {
       if (el === host || host.contains(el)) continue;
       const s = el.closest("[data-orchid]");
@@ -137,7 +138,17 @@ function boot(): void {
   }
 
   function pageRect(el: Element): Region {
-    const r = el.getBoundingClientRect();
+    let r = el.getBoundingClientRect();
+    if (r.width === 0 && r.height === 0 && el.children.length) {
+      // display: contents wrappers (component instances) have no box; use their children's.
+      let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
+      for (const c of el.children) {
+        const b = c.getBoundingClientRect();
+        if (b.width === 0 && b.height === 0) continue;
+        x1 = Math.min(x1, b.left); y1 = Math.min(y1, b.top); x2 = Math.max(x2, b.right); y2 = Math.max(y2, b.bottom);
+      }
+      if (x1 !== Infinity) r = new DOMRect(x1, y1, x2 - x1, y2 - y1);
+    }
     return { x: r.left + scrollX, y: r.top + scrollY, w: r.width, h: r.height };
   }
 
@@ -234,8 +245,7 @@ function boot(): void {
 
   document.addEventListener("click", (e) => {
     if (!editing || tool !== "select") return;
-    const t = e.composedPath()[0] as Element | undefined;
-    if (t && (t === host || host.contains(t) || panel?.contains(t))) return;
+    if (e.composedPath().includes(host)) return; // clicks on the overlay itself
     e.preventDefault();
     e.stopPropagation();
     const el = stampedAt(e.clientX, e.clientY);
