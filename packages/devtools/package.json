@@ -1,0 +1,23 @@
+{
+  "name": "@orchidery/devtools",
+  "version": "0.1.0",
+  "description": "Orchidery devtools server, annotation store and the edit-mode overlay",
+  "type": "module",
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p . && tsc --noEmit -p tsconfig.overlay.json && esbuild src/overlay/index.ts --bundle --format=iife --minify --target=es2020 --outfile=dist/overlay.js --log-level=warning"
+  },
+  "dependencies": {
+    "diff": "^9.0.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "html-to-image": "^1.11.13"
+  }
+}
