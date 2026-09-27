@@ -35,3 +35,14 @@ scenario "filter todos" {
   click "#filterAll"
   expect "#filterAll" attr "class" "o-btn-primary"
 }
+
+scenario "notes grown from a resource" {
+  visit "/notes"
+  expect "page:/notes > Stack[0] > for[0] > Link[0]" count 2
+  fill "page:/notes > #create > Stack[0] > Input[0]" "Grown at runtime"
+  submit "#create"
+  expect "page:/notes > Stack[0] > for[0] > Link[0]" count 3
+  click "page:/notes > Stack[0] > for[0] > Link[0]"
+  expect "#title" contains "Resources grow into pages"
+  expect "#remove" visible
+}

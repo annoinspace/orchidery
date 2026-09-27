@@ -2,9 +2,10 @@ import type { ActionDecl, ComponentDecl, Document, IslandDecl, LayoutDecl, PageD
 import { exprToCode, setterName } from "../ast.js";
 import { rootAddress, stamp, type Root } from "../address.js";
 import type { Diagnostic } from "../diagnostics.js";
-import { componentsOf, importedNames, importsOf, islandsOf, layoutsOf, pagesOf, tokensOf, type Program } from "../program.js";
+import { componentsOf, importedNames, importsOf, islandsOf, layoutsOf, pagesOf, resourcesOf, tokensOf, type Program } from "../program.js";
 import { validate } from "../validate.js";
 import { emitJsx, newNeeds, type Island, type JsxContext, type Needs } from "./jsx.js";
+import { emitResourceModule } from "./resources.js";
 import { emitTokensCss, emitTokensTs } from "./tokens.js";
 import { identifiers, paramsType, relativeImport, routeDir, Writer } from "./util.js";
 
@@ -55,6 +56,7 @@ export function emit(program: Program, opts: EmitOptions = {}): EmitResult {
 
   files[`${GEN}/tokens.css`] = emitTokensCss(tokens);
   files[`${GEN}/tokens.ts`] = emitTokensTs(tokens);
+  for (const r of resourcesOf(program)) files[`${GEN}/resources/${r.name}.ts`] = emitResourceModule(r);
 
   const shared = { dev, stamp, runtime, tokenPaths, componentNames, islandNames, opts };
 

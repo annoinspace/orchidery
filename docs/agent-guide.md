@@ -33,6 +33,8 @@ claude mcp add orchidery -- npx orchidery mcp
 - `orchid_get_node` returns one node: source excerpt, canonical snippet, AST and children.
 - `orchid_schema` returns the JSON Schema for documents and graft ops, the primitives with
   their props, and every diagnostic code.
+- `orchid_grow` turns a declared `resource` into list and detail pages as source. Use it
+  instead of hand-writing CRUD, then graft the result into shape.
 
 ## The tend loop
 

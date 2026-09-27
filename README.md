@@ -50,6 +50,8 @@ walls of text. Orchidery gives an agent what it needs to be reliable instead of 
   validator is the guardrail and nothing in it runs as code.
 - **Governed.** Every graft is logged with the agent that made it. Config can scope an agent
   to addresses, cap what one graft may do, and hold changes for a human to accept or revert.
+- **Resources grow into pages.** Declare fields, a data source and routes once; `orchidery grow`
+  materialises list and detail pages as ordinary source the agent then edits.
 - **The agent can look.** `orchid_preview` returns a screenshot, the box of every addressable
   node, console errors and an axe-core accessibility report. `scenario` blocks are tests
   written with addresses, runnable by the agent after every change.
@@ -95,6 +97,7 @@ safe to gitignore or commit, your choice.
 | `orchidery tend` | List open annotations |
 | `orchidery scenario [name]` | Run scenarios against the dev server |
 | `orchidery preview <route>` | Screenshot a route and report accessibility issues |
+| `orchidery grow <Resource>` | Materialise list and detail pages for a resource |
 | `orchidery log` | Show the graft log |
 | `orchidery review` | Accept or reject grafts held for review |
 | `orchidery mcp` | Run the MCP server over stdio |

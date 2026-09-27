@@ -44,3 +44,22 @@ export const db = {
     todos.delete(id);
   },
 };
+
+// -- Notes: a resource grown by `orchidery grow Note` (see orchid/note.orchid) -------------
+
+import { memoryResource } from "@orchidery/runtime/resource";
+
+export interface Note {
+  id: string;
+  title: string;
+  body?: string;
+  pinned: boolean;
+}
+
+export const notes = memoryResource<Note>(
+  [
+    { id: "n1", title: "Resources grow into pages", body: "Run orchidery grow Note to regenerate these pages.", pinned: true },
+    { id: "n2", title: "Then edit them like any page", pinned: false },
+  ],
+  "__notes",
+);

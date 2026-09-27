@@ -4,7 +4,13 @@ const INDENT = "  ";
 
 /** Print a document in canonical Orchidery formatting. parse(print(ast)) equals ast (minus spans). */
 export function print(doc: Document): string {
-  return doc.items.map(printItem).join("\n\n") + "\n";
+  let out = "";
+  doc.items.forEach((item, i) => {
+    const prev = doc.items[i - 1];
+    if (i > 0) out += prev?.kind === "import" && item.kind === "import" ? "\n" : "\n\n";
+    out += printItem(item);
+  });
+  return out + "\n";
 }
 
 function printItem(item: Item): string {
@@ -23,6 +29,12 @@ function printItem(item: Item): string {
       return `component ${item.name}${printParams(item.params)} {\n${printUi(item.body, 1)}\n}`;
     case "scenario":
       return `scenario ${JSON.stringify(item.name)} {\n${item.steps.map((s) => INDENT + printStep(s)).join("\n")}\n}`;
+    case "resource": {
+      const fields = item.fields
+        .map((f) => `${INDENT}${INDENT}${f.name}: ${f.type}${f.optional ? "?" : ""}${f.default ? ` = ${exprToCode(f.default)}` : ""}`)
+        .join("\n");
+      return `resource ${item.name} {\n${INDENT}fields {\n${fields}\n${INDENT}}\n${INDENT}source ${item.source}\n${INDENT}routes ${JSON.stringify(item.routes)}\n}`;
+    }
     case "island": {
       const blocks: string[] = [];
       if (item.state.length) {

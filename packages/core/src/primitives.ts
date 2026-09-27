@@ -33,10 +33,10 @@ export const PRIMITIVES: Record<string, PrimitiveSpec> = {
     doc: "A button. `variant` is primary, secondary, ghost or danger. With `href` it renders a link styled as a button.",
   },
   Input: {
-    props: ["name", "type", "value", "defaultValue", "placeholder", "onChange", "onInput", "disabled", "required", "autoFocus", "size"],
+    props: ["name", "type", "value", "defaultValue", "defaultChecked", "label", "placeholder", "onChange", "onInput", "disabled", "required", "autoFocus", "size"],
     required: ["name"],
     stampable: true,
-    doc: "A text input. `name` is required so forms and actions can read it.",
+    doc: "A form input. `name` is required so forms and actions can read it. `type: \"checkbox\"` with `label` renders a labelled checkbox.",
   },
   Textarea: {
     props: ["name", "value", "defaultValue", "placeholder", "onChange", "rows", "disabled", "required"],

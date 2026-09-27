@@ -283,6 +283,36 @@ export function setterName(state: string): string {
   return "set" + state.charAt(0).toUpperCase() + state.slice(1);
 }
 
+// ---------------------------------------------------------------------------
+// Resources: a typed CRUD schema. Nothing is generated at build time except a
+// parser module; `orchidery grow` materialises pages as ordinary source.
+// ---------------------------------------------------------------------------
+
+export const FieldType = z.enum(["string", "number", "boolean", "Date"]);
+export type FieldType = z.infer<typeof FieldType>;
+
+export const FieldDecl = z.object({
+  kind: z.literal("field"),
+  name: z.string(),
+  type: FieldType,
+  optional: z.boolean(),
+  default: Expr.optional(),
+  ...spanned,
+});
+export type FieldDecl = z.infer<typeof FieldDecl>;
+
+export const ResourceDecl = z.object({
+  kind: z.literal("resource"),
+  name: z.string(),
+  fields: z.array(FieldDecl),
+  /** Expression naming an object with list/find/create/update/remove, e.g. `db.notes`. */
+  source: z.string(),
+  /** Base route the grown pages live under, e.g. `/notes`. */
+  routes: z.string(),
+  ...spanned,
+});
+export type ResourceDecl = z.infer<typeof ResourceDecl>;
+
 export const Item = z.discriminatedUnion("kind", [
   TokensDecl,
   ImportDecl,
@@ -291,6 +321,7 @@ export const Item = z.discriminatedUnion("kind", [
   PageDecl,
   LayoutDecl,
   ScenarioDecl,
+  ResourceDecl,
 ]);
 export type Item = z.infer<typeof Item>;
 

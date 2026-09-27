@@ -184,17 +184,22 @@ export interface InputProps extends CommonProps {
   required?: boolean;
   autoFocus?: boolean;
   size?: "sm" | "md" | "lg";
+  defaultChecked?: boolean;
+  /** For checkboxes: text rendered beside the box. */
+  label?: string;
 }
 
 export function Input(p: InputProps & Rest) {
-  return (
+  const isCheck = p.type === "checkbox" || p.type === "radio";
+  const input = (
     <input
-      {...common(p, `o-input o-input-${p.size ?? "md"}`)}
+      {...common(p, isCheck ? "o-check" : `o-input o-input-${p.size ?? "md"}`)}
       style={p.style}
       name={p.name}
       type={p.type ?? "text"}
       value={p.value}
       defaultValue={p.defaultValue}
+      defaultChecked={p.defaultChecked}
       placeholder={p.placeholder}
       onChange={p.onChange}
       onInput={p.onInput}
@@ -202,6 +207,13 @@ export function Input(p: InputProps & Rest) {
       required={p.required}
       autoFocus={p.autoFocus}
     />
+  );
+  if (!isCheck || !p.label) return input;
+  return (
+    <label className="o-check-label">
+      {input}
+      <span>{p.label}</span>
+    </label>
   );
 }
 

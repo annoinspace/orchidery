@@ -5,10 +5,14 @@ import { spawn } from "node:child_process";
 import {
   compileProject,
   formatDiagnostic,
+  growResource,
+  grownRoutes,
   loadConfig,
   loadProgram,
+  pagesOf,
   print,
   readSources,
+  resourcesOf,
   validate,
   type Diagnostic,
 } from "@orchidery/core";
@@ -257,6 +261,40 @@ export async function run(argv: string[]): Promise<void> {
     .action(async () => {
       const { serve } = await import("@orchidery/mcp");
       await serve({ root: root() });
+    });
+
+  program
+    .command("grow <resource>")
+    .description("materialise list and detail pages for a resource as .orchid source you can then edit")
+    .option("-o, --out <file>", "where to write (default: <src>/<resource>-pages.orchid)")
+    .option("--force", "overwrite an existing file")
+    .action((name: string, o: { out?: string; force?: boolean }) => {
+      const r = root();
+      const config = loadConfig(r);
+      const { program: p, diagnostics } = loadProgram(readSources(r, config.src));
+      if (report(diagnostics)) process.exit(1);
+      const res = resourcesOf(p).find((x) => x.name === name);
+      if (!res) {
+        console.error(`${tag} ${c.red(`no resource named ${name}`)}. Declared: ${resourcesOf(p).map((x) => x.name).join(", ") || "(none)"}`);
+        process.exit(1);
+      }
+      const clashes = pagesOf(p).map((pg) => pg.route).filter((route) => grownRoutes(res).includes(route));
+      if (clashes.length && !o.force) {
+        console.error(`${tag} ${c.red("routes already exist")}: ${clashes.join(", ")}. Remove those pages or pick other routes on the resource.`);
+        process.exit(1);
+      }
+      const doc = p.documents.find((d) => d.items.includes(res))!;
+      const text = growResource(res, { out: config.out, imports: doc.items.filter((i): i is import("@orchidery/core").ImportDecl => i.kind === "import") });
+      const file = o.out ?? join(config.src, `${name.toLowerCase()}-pages.orchid`);
+      const abs = resolve(r, file);
+      if (existsSync(abs) && !o.force) {
+        console.error(`${tag} ${c.red(`${file} exists`)}; pass --force to overwrite`);
+        process.exit(1);
+      }
+      mkdirSync(dirname(abs), { recursive: true });
+      writeFileSync(abs, text);
+      console.log(`${tag} grew ${c.bold(name)} into ${file}: ${grownRoutes(res).join(", ")}`);
+      console.log(c.dim("These are ordinary pages now. Edit them, graft them, add scenarios for them."));
     });
 
   program

@@ -59,6 +59,7 @@ page "/todos/[id]" {
 | `page "/route" { load? action* meta? ui }` | A Next.js page. Routes use Next segment syntax: `/todos/[id]`, `/docs/[...slug]`. |
 | `island Name(params) { state? ui }` | A client component with local state. The only way to get client state. See Islands below. |
 | `scenario "name" { steps }` | A test in the addressing vocabulary. See Scenarios below. Ignored by the compiler. |
+| `resource Name { fields source routes }` | A typed CRUD schema. Compiles to a parser module; `orchidery grow` turns it into pages. See Resources below. |
 
 ### Inside a page
 
@@ -176,6 +177,36 @@ page "/counter" {
 - Address root: `island:Counter`. Graft ops: `add_island`, `set_state`, `remove_state`, plus
   the ordinary node ops on its `ui`.
 
+## Resources
+
+Most agent-written UI is CRUD. A resource declares the shape once:
+
+```orchid
+import { notes } from "@/lib/db"
+
+resource Note {
+  fields {
+    title: string
+    body: string?
+    pinned: boolean = false
+    due: Date?
+  }
+  source notes
+  routes "/notes"
+}
+```
+
+- Field types are `string`, `number`, `boolean` and `Date`; `?` makes a field optional and
+  `= value` gives a default. `id` is implicit.
+- `source` names an object with `list`, `find`, `create`, `update` and `remove`. Type it with
+  `defineResource` from `@orchidery/runtime/resource`, or use `memoryResource` for a prototype.
+- The compiler emits `app/_orchidery/resources/Note.ts`: the `Note` and `NoteInput` types and
+  `parseNote(form: FormData)`, which coerces and applies defaults.
+- **Nothing else is generated at build time.** `orchidery grow Note` (or the `orchid_grow`
+  tool) writes `orchid/note-pages.orchid` with a list page (create form, links) and a detail
+  page (edit form, delete) as ordinary source. From then on they are just pages: edit them,
+  graft them, add scenarios for them. Grow refuses to run when those routes already exist.
+
 ## Scenarios
 
 A scenario is a test written in the addressing vocabulary. It lives in a `.orchid` file, so
@@ -211,7 +242,8 @@ scenario "toggle a todo" {
 | `screenshot "name"` | Saves `.orchidery/scenarios/<scenario>/<name>.png`. |
 
 A target is a full address, or `#id` which resolves against the page the scenario is
-currently on. The validator checks every target exists somewhere in the project (O118)
+currently on. An address inside a `for` matches every iteration: `count` counts them,
+`click`, `fill`, `submit` and text checks use the first. The validator checks every target exists somewhere in the project (O118)
 and suggests the closest id when it does not. Expectations retry until the step timeout.
 A failing step records its error and a full-page screenshot.
 

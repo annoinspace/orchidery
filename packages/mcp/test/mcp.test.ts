@@ -57,7 +57,7 @@ describe("mcp server", () => {
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual([
       "orchid_annotation", "orchid_annotation_update", "orchid_annotations", "orchid_compile", "orchid_diff", "orchid_explain",
-      "orchid_format", "orchid_fragment_validate", "orchid_get_node", "orchid_graft", "orchid_history", "orchid_pending", "orchid_preview", "orchid_project", "orchid_read", "orchid_scenario_run", "orchid_scenarios", "orchid_schema", "orchid_validate",
+      "orchid_format", "orchid_fragment_validate", "orchid_get_node", "orchid_graft", "orchid_grow", "orchid_history", "orchid_pending", "orchid_preview", "orchid_project", "orchid_read", "orchid_scenario_run", "orchid_scenarios", "orchid_schema", "orchid_validate",
     ]);
   });
 
@@ -154,5 +154,19 @@ describe("governance", () => {
     expect(readFileSync(join(root, "orchid", "todos.orchid"), "utf8")).toContain('"Held"');
     const h = await call<{ agent: string; pending: string }[]>("orchid_history", { limit: 1 });
     expect(h[0]).toMatchObject({ agent: "test (accepted by aneesah)", pending: r.pending });
+  });
+});
+
+describe("resources", () => {
+  it("grows a resource into pages through MCP and logs it", async () => {
+    writeFileSync(join(root, "orchid", "tag.orchid"), `import { tags } from "@/lib/db"\n\nresource Tag {\n  fields {\n    label: string\n  }\n  source tags\n  routes "/tags"\n}\n`);
+    const r = await call<{ file: string; written: boolean; routes: string[]; source: string }>("orchid_grow", { resource: "Tag", write: true });
+    expect(r).toMatchObject({ file: "orchid/tag-pages.orchid", written: true, routes: ["/tags", "/tags/[id]"] });
+    expect(readFileSync(join(root, r.file), "utf8")).toContain('page "/tags/[id]"');
+    const again = await client.callTool({ name: "orchid_grow", arguments: { resource: "Tag" } });
+    expect(again.isError).toBe(true);
+    expect((again.content as { text: string }[])[0]!.text).toContain("already exist");
+    const h = await call<{ ops: { op: string }[] }[]>("orchid_history", { limit: 1 });
+    expect(h[0]!.ops[0]).toEqual({ op: "grow", resource: "Tag" });
   });
 });

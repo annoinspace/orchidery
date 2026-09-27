@@ -12,3 +12,4 @@ export { emit, type EmitOptions, type EmitResult, type MapEntry } from "./emit/i
 export { routeDir, paramsType, relativeImport, identifiers } from "./emit/util.js";
 export * from "./project.js";
 export * from "./fragment.js";
+export { growResource, grownRoutes, type GrowOptions } from "./grow.js";

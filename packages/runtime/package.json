@@ -24,6 +24,10 @@
     "./fragment-server": {
       "types": "./dist/fragment-server.d.ts",
       "import": "./dist/fragment-server.js"
+    },
+    "./resource": {
+      "types": "./dist/resource.d.ts",
+      "import": "./dist/resource.js"
     }
   },
   "files": [

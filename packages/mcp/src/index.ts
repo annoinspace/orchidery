@@ -13,6 +13,10 @@ import {
   findScenario,
   fragmentJsonSchema,
   graft,
+  growResource,
+  grownRoutes,
+  pagesOf,
+  resourcesOf,
   parseFragment,
   validateFragment,
   graftOpsJsonSchema,
@@ -32,6 +36,7 @@ import {
   walk,
   type Diagnostic,
   type Document,
+  type ImportDecl,
   type Program,
   type Root,
   type UiNode,
@@ -326,6 +331,36 @@ export function createServer(opts: ServeOptions): McpServer {
         writeFileSync(join(root, target), r.text);
         const entry = st.appendGraft({ agent, file: target, ops, touched: r.touched, annotation, before: sha(before), after: sha(r.text) });
         return text({ file: target, touched: r.touched, logged: entry.id, text: r.text });
+      } catch (e) {
+        return fail(e);
+      }
+    },
+  );
+
+  server.registerTool(
+    "orchid_grow",
+    {
+      description:
+        "Materialise a declared resource into list and detail pages as ordinary .orchid source (a create form, links, an edit form, delete). Returns the source; writes it to `file` when write is true. After growing, the pages are just pages: graft them like anything else.",
+      inputSchema: { resource: z.string(), file: z.string().optional().describe("Path to write, relative to the project root"), write: z.boolean().optional() },
+    },
+    async ({ resource, file, write }) => {
+      try {
+        const { program, diagnostics } = load();
+        if (diagnostics.length) return text({ error: "Fix parse errors first", diagnostics });
+        const res = resourcesOf(program).find((r) => r.name === resource);
+        if (!res) return fail(new Error(`No resource named ${resource}. Declared: ${resourcesOf(program).map((r) => r.name).join(", ") || "(none)"}`));
+        const clashes = pagesOf(program).map((p) => p.route).filter((r) => grownRoutes(res).includes(r));
+        if (clashes.length) return fail(new Error(`Routes already exist: ${clashes.join(", ")}. Remove those pages or change the resource's routes.`));
+        const doc = program.documents.find((d) => d.items.includes(res))!;
+        const source = growResource(res, { out: config().out, imports: doc.items.filter((i): i is ImportDecl => i.kind === "import") });
+        const target = file ?? `${config().src}/${resource.toLowerCase()}-pages.orchid`;
+        if (write) {
+          const before = store().readFile(target);
+          writeFileSync(join(root, target), source);
+          store().appendGraft({ agent: agentName(), file: target, ops: [{ op: "grow", resource }], touched: grownRoutes(res).map((r) => `page:${r}`), before: sha(before), after: sha(source) });
+        }
+        return text({ file: target, written: !!write, routes: grownRoutes(res), source });
       } catch (e) {
         return fail(e);
       }

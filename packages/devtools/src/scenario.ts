@@ -98,14 +98,15 @@ async function runStep(step: ScenarioStep, ctx: StepCtx): Promise<{ screenshot?:
       return;
     }
     case "click":
-      await locate(step.target, ctx).click({ timeout });
+      // Addresses inside a `for` match every iteration; act on the first, like `expect` does.
+      await locate(step.target, ctx).first().click({ timeout });
       await settle(page);
       return;
     case "fill":
-      await locate(step.target, ctx).fill(step.value, { timeout });
+      await locate(step.target, ctx).first().fill(step.value, { timeout });
       return;
     case "submit": {
-      const loc = locate(step.target, ctx);
+      const loc = locate(step.target, ctx).first();
       const tag = await loc.evaluate((el) => el.tagName.toLowerCase(), undefined, { timeout });
       if (tag === "form") await loc.evaluate((el) => (el as HTMLFormElement).requestSubmit());
       else await loc.locator("form").first().evaluate((el) => (el as HTMLFormElement).requestSubmit());

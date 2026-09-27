@@ -1,0 +1,11 @@
+import { notes } from "@/lib/db"
+
+resource Note {
+  fields {
+    title: string
+    body: string?
+    pinned: boolean = false
+  }
+  source notes
+  routes "/notes"
+}

@@ -4,6 +4,7 @@ import type {
   ComponentDecl,
   Document,
   Expr,
+  FieldType,
   ImportDecl,
   IslandDecl,
   Item,
@@ -13,6 +14,7 @@ import type {
   PageDecl,
   Param,
   Prop,
+  ResourceDecl,
   ScenarioDecl,
   ScenarioStep,
   TokensDecl,
@@ -20,7 +22,7 @@ import type {
 } from "./ast.js";
 import { Scanner } from "./lexer.js";
 
-const TOP_LEVEL = ["tokens", "import", "component", "island", "layout", "page", "scenario"];
+const TOP_LEVEL = ["tokens", "import", "component", "island", "layout", "page", "scenario", "resource"];
 const PAGE_BLOCKS = ["load", "action", "meta", "ui"];
 const LAYOUT_BLOCKS = ["load", "meta", "ui"];
 const DOTTED = /^[A-Za-z_$][\w$]*(\.[A-Za-z_$][\w$]*)*$/;
@@ -83,6 +85,7 @@ class Parser {
       case "import": return this.import(start);
       case "component": return this.component(start);
       case "island": return this.island(start);
+      case "resource": return this.resource(start);
       case "layout": return this.layout(start);
       case "page": return this.page(start);
       case "scenario": return this.scenario(start);
@@ -236,6 +239,65 @@ class Parser {
     this.s.skipWs();
     const body = this.block(() => this.uiItems());
     return { kind: "component", name, params, body, span: this.s.spanFrom(start) };
+  }
+
+  // -- resource ------------------------------------------------------------
+
+  private resource(start: ReturnType<Scanner["position"]>): ResourceDecl {
+    this.s.skipInline();
+    const name = this.s.readIdent();
+    this.s.skipWs();
+    const res: ResourceDecl = { kind: "resource", name, fields: [], source: "", routes: "" };
+    this.block(() => {
+      for (;;) {
+        this.s.skipWs();
+        if (this.s.peek() === "}" || this.s.eof) return;
+        const bs = this.s.position();
+        const word = this.s.readIdent();
+        switch (word) {
+          case "fields":
+            this.s.skipWs();
+            this.block(() => {
+              for (;;) {
+                this.s.skipWs();
+                if (this.s.peek() === "}" || this.s.eof) return;
+                const fs = this.s.position();
+                const fname = this.s.readIdent();
+                this.s.skipInline();
+                this.s.expect(":");
+                this.s.skipInline();
+                const raw = this.s.readRaw("}", true);
+                const m = /^(string|number|boolean|Date)(\?)?(?:\s*=\s*(.+))?$/s.exec(raw.trim());
+                if (!m) this.s.fail("O120", `Field \`${fname}\` needs a type of string, number, boolean or Date, optionally \`?\` and \`= default\`; got \`${raw}\``, fs);
+                res.fields.push({
+                  kind: "field",
+                  name: fname,
+                  type: m[1] as FieldType,
+                  optional: !!m[2],
+                  default: m[3] ? this.exprValue(m[3].trim(), fs) : undefined,
+                  span: this.s.spanFrom(fs),
+                });
+                this.s.skipInline();
+                this.s.eat(";");
+              }
+            });
+            break;
+          case "source":
+            this.s.skipInline();
+            res.source = this.s.readDotted();
+            break;
+          case "routes":
+            this.s.skipInline();
+            res.routes = this.s.readString();
+            if (!res.routes.startsWith("/")) this.s.fail("O007", `Routes \`${res.routes}\` must start with /`, bs);
+            break;
+          default:
+            this.s.fail("O120", `Unknown block \`${word}\` in resource; expected fields, source or routes`, bs);
+        }
+      }
+    });
+    res.span = this.s.spanFrom(start);
+    return res;
   }
 
   // -- island --------------------------------------------------------------

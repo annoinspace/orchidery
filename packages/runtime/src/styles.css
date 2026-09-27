@@ -73,3 +73,5 @@ body {
 .o-no-underline { text-decoration: none; }
 .o-divider { border: 0; border-top: 1px solid var(--color-border, #e5e7eb); margin: 0; }
 .o-image { max-width: 100%; height: auto; }
+.o-check-label { display: inline-flex; align-items: center; gap: 0.5rem; cursor: pointer; }
+.o-check { width: 1rem; height: 1rem; accent-color: var(--color-primary, #7b3fa0); }

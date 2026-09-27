@@ -1,4 +1,4 @@
-import type { ComponentDecl, Document, ImportDecl, IslandDecl, LayoutDecl, PageDecl, TokenEntry } from "./ast.js";
+import type { ComponentDecl, Document, ImportDecl, IslandDecl, LayoutDecl, PageDecl, ResourceDecl, TokenEntry } from "./ast.js";
 import { parse } from "./parser.js";
 
 /** A set of .orchid documents compiled together. */
@@ -28,6 +28,10 @@ export function componentsOf(p: Program): ComponentDecl[] {
 
 export function islandsOf(p: Program): IslandDecl[] {
   return p.documents.flatMap((d) => d.items.filter((i): i is IslandDecl => i.kind === "island"));
+}
+
+export function resourcesOf(p: Program): ResourceDecl[] {
+  return p.documents.flatMap((d) => d.items.filter((i): i is ResourceDecl => i.kind === "resource"));
 }
 
 export function pagesOf(p: Program): PageDecl[] {

@@ -1,0 +1,90 @@
+import { notes } from "@/lib/db"
+import { parseNote } from "@/app/_orchidery/resources/Note"
+import { notFound } from "next/navigation"
+
+page "/notes" {
+  meta {
+    title: "Notes"
+  }
+
+  load {
+    noteList: await notes.list()
+  }
+
+  action create(form: FormData) {
+    await notes.create(parseNote(form))
+    revalidate "/notes"
+  }
+
+  ui {
+    Stack(gap: 16) {
+      Heading(level: 1) {
+        "Notes"
+      }
+      Form#create(action: create) {
+        Stack(gap: 8) {
+          Input(name: "title", placeholder: "Title", required)
+          Input(name: "body", placeholder: "Body")
+          Input(name: "pinned", type: "checkbox", label: "Pinned")
+          Button(type: "submit", variant: "primary") {
+            "Add note"
+          }
+        }
+      }
+      if noteList.length === 0 {
+        Text(muted) {
+          "No noteList yet."
+        }
+      }
+      for note in noteList key note.id {
+        Link(href: `/notes/${note.id}`) {
+          note.title
+        }
+      }
+    }
+  }
+}
+
+page "/notes/[id]" {
+  load {
+    note: (await notes.find(params.id)) ?? notFound()
+  }
+
+  action update(id: string, form: FormData) {
+    await notes.update(id, parseNote(form))
+    revalidate "/notes"
+    revalidate "/notes/[id]"
+  }
+
+  action remove(id: string) {
+    await notes.remove(id)
+    revalidate "/notes"
+    redirect "/notes"
+  }
+
+  ui {
+    Stack(gap: 16) {
+      Heading#title(level: 1) {
+        note.title
+      }
+      Form#edit(action: update.bind(null, note.id)) {
+        Stack(gap: 8) {
+          Input(name: "title", placeholder: "Title", defaultValue: note.title, required)
+          Input(name: "body", placeholder: "Body", defaultValue: note.body)
+          Input(name: "pinned", type: "checkbox", label: "Pinned", defaultChecked: note.pinned)
+          Stack(direction: "row", gap: 8) {
+            Button(type: "submit", variant: "primary") {
+              "Save"
+            }
+            Button#remove(onClick: remove(note.id), variant: "danger") {
+              "Delete"
+            }
+            Button(href: "/notes") {
+              "Back"
+            }
+          }
+        }
+      }
+    }
+  }
+}

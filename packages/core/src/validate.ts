@@ -2,6 +2,7 @@ import { isEventProp, setterName, type Document, type Expr, type Prop, type Span
 import { isRoot, rootAddress, rootUi, type Root, walk } from "./address.js";
 import type { Diagnostic } from "./diagnostics.js";
 import { PRIMITIVES, allowedProps, isPrimitive } from "./primitives.js";
+import { exprIdentifiers } from "./emit/util.js";
 import {
   componentsOf,
   islandsOf,
@@ -48,7 +49,28 @@ export function validate(program: Program): Diagnostic[] {
   }
 
   validateScenarios(program, out);
+  validateResources(program, out);
   return out;
+}
+
+function validateResources(program: Program, out: Diagnostic[]): void {
+  const seen = new Set<string>();
+  for (const doc of program.documents) {
+    for (const r of doc.items) {
+      if (r.kind !== "resource") continue;
+      if (seen.has(r.name)) out.push(diag("O121", `Resource \`${r.name}\` is declared more than once`, doc.file, r.span));
+      seen.add(r.name);
+      if (!r.fields.length) out.push(diag("O120", `Resource \`${r.name}\` has no fields`, doc.file, r.span));
+      if (!r.source) out.push(diag("O120", `Resource \`${r.name}\` needs a \`source\` such as db.${r.name.toLowerCase()}s`, doc.file, r.span));
+      if (!r.routes) out.push(diag("O120", `Resource \`${r.name}\` needs \`routes "/path"\``, doc.file, r.span));
+      const fields = new Set<string>();
+      for (const f of r.fields) {
+        if (f.name === "id") out.push(diag("O120", `Field \`id\` is implicit on every resource`, doc.file, f.span));
+        if (fields.has(f.name)) out.push(diag("O121", `Field \`${f.name}\` is declared twice on ${r.name}`, doc.file, f.span));
+        fields.add(f.name);
+      }
+    }
+  }
 }
 
 /** Scenarios: unique names (O117), start with visit (O119), targets resolve (O118). */
@@ -125,6 +147,9 @@ function validateRoot(root: Root, ctx: Ctx): void {
     const seen = new Set<string>();
     for (const b of root.load.bindings) {
       if (seen.has(b.name)) ctx.out.push(diag("O111", `Load binding \`${b.name}\` is declared more than once in ${rootAddress(root)}`, file, b.span));
+      if (ctx.imports.has(b.name) && exprIdentifiers(b.expr).has(b.name)) {
+        ctx.out.push(diag("O122", `Load binding \`${b.name}\` shadows the import it reads from; rename the binding`, file, b.span));
+      }
       seen.add(b.name);
       scope.add(b.name);
     }
