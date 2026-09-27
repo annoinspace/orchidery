@@ -1,0 +1,19 @@
+{
+  "name": "@orchidery/mcp",
+  "version": "0.1.0",
+  "description": "MCP server that lets agents validate, compile, graft and tend an Orchidery project",
+  "type": "module",
+  "license": "MIT",
+  "bin": { "orchidery-mcp": "./dist/bin.js" },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
+  "files": ["dist"],
+  "scripts": { "build": "tsc -p ." },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.1",
+    "@orchidery/core": "workspace:*",
+    "@orchidery/devtools": "workspace:*",
+    "zod": "^4.6.5"
+  }
+}

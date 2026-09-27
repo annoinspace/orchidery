@@ -9,6 +9,7 @@ export default defineConfig({
     alias: {
       "@orchidery/core": pkg("core"),
       "@orchidery/devtools": pkg("devtools"),
+      "@orchidery/mcp": pkg("mcp"),
     },
   },
   test: {

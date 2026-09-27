@@ -1,0 +1,21 @@
+{
+  "name": "orchidery",
+  "version": "0.1.0",
+  "description": "An agent-first UI format that grows on Next.js",
+  "type": "module",
+  "license": "MIT",
+  "bin": { "orchidery": "./dist/bin.js" },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p ."
+  },
+  "dependencies": {
+    "@orchidery/core": "workspace:*",
+    "@orchidery/devtools": "workspace:*",
+    "@orchidery/mcp": "workspace:*",
+    "commander": "^15.0.0"
+  },
+  "keywords": ["nextjs", "agents", "mcp", "dsl", "ui"]
+}
