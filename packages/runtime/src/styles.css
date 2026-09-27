@@ -1,0 +1,75 @@
+/* Orchidery runtime base styles. Every value falls back to a sensible default
+   when the corresponding token is not declared. */
+:root {
+  --o-font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.12);
+}
+
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: var(--font-body, var(--o-font));
+  color: var(--color-text, #1a1a1a);
+  background: var(--color-bg, #fafafa);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+* { box-sizing: border-box; }
+
+.o-text { margin: 0; }
+.o-heading { margin: 0; font-weight: 600; line-height: 1.2; letter-spacing: -0.01em; }
+.o-heading-1 { font-size: 2rem; }
+.o-heading-2 { font-size: 1.5rem; }
+.o-heading-3 { font-size: 1.25rem; }
+.o-heading-4 { font-size: 1.1rem; }
+.o-heading-5, .o-heading-6 { font-size: 1rem; }
+
+.o-size-xs { font-size: 0.75rem; }
+.o-size-sm { font-size: 0.875rem; }
+.o-size-md { font-size: 1rem; }
+.o-size-lg { font-size: 1.25rem; }
+.o-size-xl { font-size: 1.5rem; }
+.o-weight-normal { font-weight: 400; }
+.o-weight-medium { font-weight: 500; }
+.o-weight-semibold { font-weight: 600; }
+.o-weight-bold { font-weight: 700; }
+.o-muted { color: var(--color-muted, #6b7280); }
+.o-truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.o-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.5em;
+  font: inherit; font-weight: 500; cursor: pointer; text-decoration: none;
+  border: 1px solid transparent; border-radius: var(--radius-md, 8px);
+  transition: background 120ms, border-color 120ms, opacity 120ms;
+}
+.o-btn:disabled, .o-btn[aria-disabled="true"] { opacity: 0.5; cursor: not-allowed; }
+.o-btn-sm { padding: 0.25rem 0.625rem; font-size: 0.875rem; }
+.o-btn-md { padding: 0.5rem 0.875rem; font-size: 0.9375rem; }
+.o-btn-lg { padding: 0.75rem 1.25rem; font-size: 1.0625rem; }
+.o-btn-primary { background: var(--color-primary, #7b3fa0); color: var(--color-on-primary, #fff); }
+.o-btn-primary:hover:not(:disabled) { filter: brightness(1.08); }
+.o-btn-secondary { background: var(--color-surface, #fff); color: var(--color-text, #1a1a1a); border-color: var(--color-border, #e5e7eb); }
+.o-btn-secondary:hover:not(:disabled) { background: var(--color-surface-hover, #f3f4f6); }
+.o-btn-ghost { background: transparent; color: var(--color-text, #1a1a1a); }
+.o-btn-ghost:hover:not(:disabled) { background: var(--color-surface-hover, #f3f4f6); }
+.o-btn-danger { background: var(--color-danger, #dc2626); color: #fff; }
+.o-full { width: 100%; }
+
+.o-input {
+  font: inherit; width: 100%; color: inherit;
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: var(--radius-md, 8px);
+}
+.o-input:focus { outline: 2px solid var(--color-primary, #7b3fa0); outline-offset: 1px; }
+.o-input-sm { padding: 0.25rem 0.5rem; font-size: 0.875rem; }
+.o-input-md { padding: 0.5rem 0.75rem; }
+.o-input-lg { padding: 0.75rem 1rem; font-size: 1.0625rem; }
+.o-textarea { padding: 0.5rem 0.75rem; resize: vertical; }
+
+.o-form { display: contents; }
+.o-link { color: var(--color-primary, #7b3fa0); text-decoration: underline; text-underline-offset: 2px; }
+.o-no-underline { text-decoration: none; }
+.o-divider { border: 0; border-top: 1px solid var(--color-border, #e5e7eb); margin: 0; }
+.o-image { max-width: 100%; height: auto; }
