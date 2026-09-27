@@ -48,6 +48,8 @@ walls of text. Orchidery gives an agent what it needs to be reliable instead of 
 - **Generative UI, safely.** A fragment is a ui block rendered at runtime from model output.
   It may use primitives, tokens, `data.*` paths and `act(...)` calls, nothing else, so the
   validator is the guardrail and nothing in it runs as code.
+- **Governed.** Every graft is logged with the agent that made it. Config can scope an agent
+  to addresses, cap what one graft may do, and hold changes for a human to accept or revert.
 - **The agent can look.** `orchid_preview` returns a screenshot, the box of every addressable
   node, console errors and an axe-core accessibility report. `scenario` blocks are tests
   written with addresses, runnable by the agent after every change.
@@ -93,6 +95,8 @@ safe to gitignore or commit, your choice.
 | `orchidery tend` | List open annotations |
 | `orchidery scenario [name]` | Run scenarios against the dev server |
 | `orchidery preview <route>` | Screenshot a route and report accessibility issues |
+| `orchidery log` | Show the graft log |
+| `orchidery review` | Accept or reject grafts held for review |
 | `orchidery mcp` | Run the MCP server over stdio |
 | `orchidery init` | Scaffold a project |
 
@@ -112,6 +116,7 @@ safe to gitignore or commit, your choice.
 - [Diagnostics](docs/diagnostics.md): every code and its fix
 - [Agent guide](docs/agent-guide.md): how an agent should tend annotations
 - [Runtime fragments](docs/fragments.md): render model output safely with `<Orchid>`
+- [Governance](docs/governance.md): the graft log, per-agent scopes, budgets and the review gate
 
 ## Name
 

@@ -21,6 +21,8 @@ const sourcePath = join(root, "orchid/todos.orchid");
 const originalSource = readFileSync(sourcePath, "utf8");
 const scenarioPath = join(root, "orchid/scenarios.orchid");
 const originalScenarios = readFileSync(scenarioPath, "utf8");
+const configPath = join(root, "orchidery.config.json");
+const originalConfig = readFileSync(configPath, "utf8");
 
 let dev: ChildProcess;
 let browser: Browser;
@@ -58,6 +60,7 @@ beforeAll(async () => {
 afterAll(async () => {
   writeFileSync(sourcePath, originalSource);
   writeFileSync(scenarioPath, originalScenarios);
+  writeFileSync(configPath, originalConfig);
   await browser?.close();
   dev?.kill("SIGTERM");
   await new Promise((r) => setTimeout(r, 500));
@@ -185,6 +188,36 @@ describe("edit mode -> annotation -> graft -> reload", () => {
     const client = await mcp();
     const bad = await client.callTool({ name: "orchid_fragment_validate", arguments: { source: 'Text { fetch("/x") }' } });
     expect(JSON.parse((bad.content as { text: string }[])[0]!.text).diagnostics[0].code).toBe("O302");
+  });
+
+  it("holds an agent graft for review and lets the human accept it in the overlay", async () => {
+    writeFileSync(configPath, JSON.stringify({ ...JSON.parse(originalConfig), review: "required" }, null, 2));
+    const before = readFileSync(sourcePath, "utf8");
+    const client = await mcp();
+    const held = await client.callTool({
+      name: "orchid_graft",
+      arguments: { ops: [{ op: "set_text", address: "page:/todos/[id] > #toggle", value: "Toggle it" }] },
+    });
+    const info = JSON.parse((held.content as { text: string }[])[0]!.text);
+    expect(info.pending).toMatch(/^[a-z0-9]+$/);
+    expect(readFileSync(sourcePath, "utf8")).toBe(before);
+
+    await page.goto(`${APP}/todos/b2`, { waitUntil: "networkidle" });
+    const reviewBtn = page.locator("orchidery-devtools #review");
+    await reviewBtn.waitFor({ state: "visible", timeout: 20_000 });
+    await expect(reviewBtn.innerText()).resolves.toContain("Review 1");
+    await reviewBtn.click();
+    const item = page.locator(`orchidery-devtools .review-panel [data-pending="${info.pending}"]`);
+    await item.waitFor();
+    await expect(item.locator("pre").innerText()).resolves.toContain("Toggle it");
+    await item.locator('[data-act="accept"]').click();
+    await page.locator("orchidery-devtools .toast").waitFor();
+
+    await expect.poll(() => readFileSync(sourcePath, "utf8")).toContain('"Toggle it"');
+    const log = readFileSync(join(root, ".orchidery/grafts.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l));
+    const entry = log.find((e) => e.pending === info.pending);
+    expect(entry).toMatchObject({ agent: "e2e (accepted by human)", file: "orchid/todos.orchid", touched: ["page:/todos/[id] > #toggle"] });
+    writeFileSync(configPath, originalConfig);
   });
 
   it("reports a failing step with an error and a screenshot", async () => {

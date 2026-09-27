@@ -41,11 +41,13 @@ Ask `orchid_explain` for any code.
 | `O117` | Duplicate scenario | Two scenarios share a name. Names are how scenarios are addressed and run, so they must be unique across the project. |
 | `O118` | Scenario target not found | A step names an address that no page, layout or component declares. `#id` targets must exist in some page; full addresses must resolve. |
 | `O119` | Scenario must start with visit | The first step of a scenario has to be `visit` with a path so later steps have a page to act on. |
-| **Grafts** | | |
+| **Grafts and governance** | | |
 | `O201` | Address not found | No node matches the given address in this document. |
 | `O202` | Invalid graft op | The graft operation is malformed or targets a node kind it cannot apply to. |
 | `O203` | Graft would produce invalid document | Applying the ops produced a document that fails validation, so nothing was written. |
 | `O204` | Invalid address syntax | Addresses look like `page:/todos/[id] > ui > Card[0] > #done`. |
+| `O205` | Address outside agent scope | The project's config limits this agent to certain addresses (`agents.<name>.allow` / `deny` globs such as `page:/settings*`). Nothing was applied. Ask a human to widen the scope or make the change elsewhere. |
+| `O206` | Graft budget exceeded | The graft has more ops, or would touch more nodes for this annotation, than the project's `budgets` allow. Split the work into smaller grafts or ask a human to raise the budget. |
 | **Fragments** | | |
 | `O301` | Unknown element in fragment | Fragments may use the built-in primitives and the components the host registered. Anything else is rejected before rendering. |
 | `O302` | Unsafe expression in fragment | Fragment expressions are limited to literals, `data.*` paths, loop variables, tokens, template literals over those, and `act("name", ...)` calls on event props. No other code runs at runtime. |

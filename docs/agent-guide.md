@@ -19,6 +19,11 @@ claude mcp add orchidery -- npx orchidery mcp
 5. **A failed graft changed nothing.** The error carries the diagnostics. Fix and retry.
 6. **Mark annotations as you go.** `in_progress` when you start, `done` with a one-line
    summary when finished, `rejected` with a reason if you won't do it.
+7. **Pass `annotation` on every graft** that works one, so the log attributes the change.
+8. **Respect the answer.** `O205` means the project scoped you out of that address and
+   `O206` means you hit a budget: do not route around either. A `pending` result means a
+   human will accept or revert your change; say so in the annotation summary and stop.
+   See [governance](governance.md).
 
 ## Orientation
 

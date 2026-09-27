@@ -23,9 +23,35 @@ export interface ProjectConfig {
    * map at public/.orchidery/map.json so operating agents can resolve addresses.
    */
   stamps: "dev" | "always";
+  /**
+   * Per-agent address scopes, keyed by the MCP client name (e.g. "claude-code").
+   * Globs match addresses: `page:/settings*`, `component:*`, `*`. Deny wins over allow;
+   * with an allow list, anything unmatched is denied. Agents not listed are unrestricted
+   * unless a `"*"` entry exists.
+   */
+  agents?: Record<string, AgentScope>;
+  /** `required` makes agent grafts land in a pending queue for a human to accept or revert. */
+  review?: "none" | "required";
+  budgets?: {
+    /** Maximum ops in one graft. Default 50. */
+    opsPerGraft?: number;
+    /** Maximum distinct nodes an agent may touch while working one annotation. Default unlimited. */
+    nodesPerAnnotation?: number;
+  };
 }
 
-export const DEFAULT_CONFIG: ProjectConfig = { src: "orchid", out: "app", devtoolsPort: 4747, stamps: "dev" };
+export interface AgentScope {
+  allow?: string[];
+  deny?: string[];
+}
+
+export const DEFAULT_CONFIG: ProjectConfig = { src: "orchid", out: "app", devtoolsPort: 4747, stamps: "dev", review: "none" };
+
+/** Scope for a named agent: its own entry, else the `*` entry, else unrestricted. */
+export function scopeFor(config: ProjectConfig, agent: string | undefined): AgentScope | undefined {
+  if (!config.agents) return undefined;
+  return config.agents[agent ?? ""] ?? config.agents["*"];
+}
 
 export function loadConfig(root: string): ProjectConfig {
   const p = join(root, "orchidery.config.json");

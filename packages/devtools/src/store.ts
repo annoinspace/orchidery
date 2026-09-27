@@ -1,7 +1,8 @@
 import { createTwoFilesPatch } from "diff";
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
-import type { AddressMap, Annotation, AnnotationStatus, NewAnnotation } from "./types.js";
+import type { AddressMap, Annotation, AnnotationStatus, GraftLogEntry, NewAnnotation, PendingGraft } from "./types.js";
 
 /**
  * File-backed annotation queue under `<root>/.orchidery/`. Both the devtools
@@ -142,6 +143,105 @@ export class Store {
   private write(a: Annotation): void {
     writeFileSync(join(this.annotationsDir, `${a.id}.json`), JSON.stringify(a, null, 2));
   }
+
+  // -- graft log ---------------------------------------------------------
+
+  get logPath(): string {
+    return join(this.dir, "grafts.jsonl");
+  }
+
+  appendGraft(entry: Omit<GraftLogEntry, "id" | "at">): GraftLogEntry {
+    const full: GraftLogEntry = { id: newId(), at: new Date().toISOString(), ...entry };
+    appendFileSync(this.logPath, JSON.stringify(full) + "\n");
+    return full;
+  }
+
+  history(filter: { address?: string; annotation?: string; agent?: string; since?: string; limit?: number } = {}): GraftLogEntry[] {
+    if (!existsSync(this.logPath)) return [];
+    const lines = readFileSync(this.logPath, "utf8").split("\n").filter(Boolean);
+    let out: GraftLogEntry[] = [];
+    for (const l of lines) {
+      try {
+        out.push(JSON.parse(l) as GraftLogEntry);
+      } catch {
+        /* skip corrupt line */
+      }
+    }
+    if (filter.since) out = out.filter((e) => e.at >= filter.since!);
+    if (filter.agent) out = out.filter((e) => e.agent === filter.agent);
+    if (filter.annotation) out = out.filter((e) => e.annotation === filter.annotation);
+    if (filter.address) {
+      const a = filter.address.split(">").map((s) => s.trim()).join(" > ");
+      out = out.filter((e) => e.touched.some((t: string) => t === a || t.startsWith(a + " > ") || a.startsWith(t + " > ")));
+    }
+    out.reverse();
+    return filter.limit ? out.slice(0, filter.limit) : out;
+  }
+
+  /** Distinct addresses already touched for an annotation, for the nodes-per-annotation budget. */
+  touchedFor(annotation: string): string[] {
+    return [...new Set(this.history({ annotation }).flatMap((e) => e.touched))];
+  }
+
+  // -- review gate -------------------------------------------------------
+
+  get pendingDir(): string {
+    const p = join(this.dir, "pending");
+    mkdirSync(p, { recursive: true });
+    return p;
+  }
+
+  /** Hold a graft for review instead of writing it. */
+  hold(p: Omit<PendingGraft, "id" | "createdAt" | "diff">): PendingGraft {
+    const current = this.readFile(p.file);
+    const diff = createTwoFilesPatch(p.file, p.file, current, p.text, "current", "proposed");
+    const full: PendingGraft = { id: newId(), createdAt: new Date().toISOString(), diff, ...p };
+    writeFileSync(join(this.pendingDir, `${full.id}.json`), JSON.stringify(full, null, 2));
+    return full;
+  }
+
+  listPending(): PendingGraft[] {
+    return readdirSync(this.pendingDir)
+      .filter((f) => f.endsWith(".json"))
+      .map((f) => JSON.parse(readFileSync(join(this.pendingDir, f), "utf8")) as PendingGraft)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  }
+
+  getPending(id: string): PendingGraft | undefined {
+    const p = join(this.pendingDir, `${safe(id)}.json`);
+    return existsSync(p) ? (JSON.parse(readFileSync(p, "utf8")) as PendingGraft) : undefined;
+  }
+
+  /**
+   * Write a held graft to its file and log it. Fails when the file changed
+   * since the graft was computed, so a stale proposal never clobbers newer work.
+   */
+  accept(id: string, by = "human"): { ok: true; entry: GraftLogEntry } | { ok: false; reason: string } {
+    const p = this.getPending(id);
+    if (!p) return { ok: false, reason: `No pending graft ${id}` };
+    const current = this.readFile(p.file);
+    if (sha(current) !== p.before) return { ok: false, reason: `${p.file} changed since this graft was proposed; ask the agent to redo it` };
+    writeFileSync(join(this.root, p.file), p.text);
+    const entry = this.appendGraft({ agent: `${p.agent} (accepted by ${by})`, file: p.file, ops: p.ops, touched: p.touched, annotation: p.annotation, before: p.before, after: sha(p.text), pending: id });
+    rmSync(join(this.pendingDir, `${id}.json`), { force: true });
+    return { ok: true, entry };
+  }
+
+  reject(id: string): boolean {
+    const f = join(this.pendingDir, `${safe(id)}.json`);
+    if (!existsSync(f)) return false;
+    rmSync(f);
+    return true;
+  }
+
+  readFile(rel: string): string {
+    const abs = join(this.root, rel);
+    return existsSync(abs) ? readFileSync(abs, "utf8") : "";
+  }
+}
+
+export function sha(text: string): string {
+  return createHash("sha256").update(text).digest("hex").slice(0, 16);
 }
 
 function safe(id: string): string {

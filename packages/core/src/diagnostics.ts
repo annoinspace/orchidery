@@ -65,6 +65,8 @@ export const DIAGNOSTIC_DOCS: Record<string, { title: string; explanation: strin
   O202: { title: "Invalid graft op", explanation: "The graft operation is malformed or targets a node kind it cannot apply to." },
   O203: { title: "Graft would produce invalid document", explanation: "Applying the ops produced a document that fails validation, so nothing was written." },
   O204: { title: "Invalid address syntax", explanation: "Addresses look like `page:/todos/[id] > ui > Card[0] > #done`." },
+  O205: { title: "Address outside agent scope", explanation: "The project's config limits this agent to certain addresses (`agents.<name>.allow` / `deny` globs such as `page:/settings*`). Nothing was applied. Ask a human to widen the scope or make the change elsewhere." },
+  O206: { title: "Graft budget exceeded", explanation: "The graft has more ops, or would touch more nodes for this annotation, than the project's `budgets` allow. Split the work into smaller grafts or ask a human to raise the budget." },
 
   // Fragments (runtime-rendered ui from model output): O3xx
   O301: { title: "Unknown element in fragment", explanation: "Fragments may use the built-in primitives and the components the host registered. Anything else is rejected before rendering." },

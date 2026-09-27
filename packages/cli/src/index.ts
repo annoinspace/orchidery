@@ -201,6 +201,57 @@ export async function run(argv: string[]): Promise<void> {
     });
 
   program
+    .command("log")
+    .description("show the graft log: who changed which nodes, when")
+    .option("--address <address>", "only grafts touching this address or its subtree")
+    .option("--annotation <id>", "only grafts for this annotation")
+    .option("-n, --limit <n>", "how many entries", "30")
+    .action((o: { address?: string; annotation?: string; limit: string }) => {
+      const config = loadConfig(root());
+      const entries = new Store(root(), config.src).history({ address: o.address, annotation: o.annotation, limit: Number(o.limit) });
+      if (!entries.length) {
+        console.log(`${tag} no grafts logged yet`);
+        return;
+      }
+      for (const e of entries) {
+        console.log(`${c.dim(e.at)} ${c.bold(e.agent)} ${e.file}${e.annotation ? c.dim(`  annotation ${e.annotation}`) : ""}`);
+        console.log(`  ${(e.ops as { op: string }[]).map((op) => op.op).join(", ")}`);
+        for (const t of e.touched) console.log(`  ${c.dim("→")} ${t}`);
+      }
+    });
+
+  program
+    .command("review")
+    .description("list grafts held for review; accept or reject them")
+    .option("--accept <id>", "write this pending graft to its file")
+    .option("--reject <id>", "discard this pending graft")
+    .option("--accept-all", "accept every pending graft")
+    .action((o: { accept?: string; reject?: string; acceptAll?: boolean }) => {
+      const config = loadConfig(root());
+      const store = new Store(root(), config.src);
+      const user = process.env.USER ?? "human";
+      const accept = (id: string) => {
+        const r = store.accept(id, user);
+        console.log(r.ok ? `${c.green("accepted")} ${id} → ${r.entry.file}` : `${c.red("refused")} ${id}: ${r.reason}`);
+        if (!r.ok) process.exitCode = 1;
+      };
+      if (o.accept) return accept(o.accept);
+      if (o.reject) return console.log(store.reject(o.reject) ? `${c.dim("rejected")} ${o.reject}` : `${c.red("no such pending graft")} ${o.reject}`);
+      const pending = store.listPending();
+      if (o.acceptAll) return pending.forEach((p) => accept(p.id));
+      if (!pending.length) {
+        console.log(`${tag} nothing pending${config.review !== "required" ? c.dim(' (set "review": "required" in orchidery.config.json to hold agent grafts)') : ""}`);
+        return;
+      }
+      for (const p of pending) {
+        console.log(`${c.bold(p.id)} ${c.dim(p.createdAt)} ${p.agent} → ${p.file}${p.annotation ? c.dim(`  annotation ${p.annotation}`) : ""}`);
+        for (const t of p.touched) console.log(`  ${c.dim("→")} ${t}`);
+        console.log(p.diff.split("\n").map((l) => "  " + (l.startsWith("+") ? c.green(l) : l.startsWith("-") ? c.red(l) : c.dim(l))).join("\n"));
+      }
+      console.log(c.dim(`\norchidery review --accept <id> | --reject <id> | --accept-all`));
+    });
+
+  program
     .command("mcp")
     .description("run the MCP server over stdio for agents")
     .action(async () => {

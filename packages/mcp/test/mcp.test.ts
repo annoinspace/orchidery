@@ -57,7 +57,7 @@ describe("mcp server", () => {
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual([
       "orchid_annotation", "orchid_annotation_update", "orchid_annotations", "orchid_compile", "orchid_diff", "orchid_explain",
-      "orchid_format", "orchid_fragment_validate", "orchid_get_node", "orchid_graft", "orchid_preview", "orchid_project", "orchid_read", "orchid_scenario_run", "orchid_scenarios", "orchid_schema", "orchid_validate",
+      "orchid_format", "orchid_fragment_validate", "orchid_get_node", "orchid_graft", "orchid_history", "orchid_pending", "orchid_preview", "orchid_project", "orchid_read", "orchid_scenario_run", "orchid_scenarios", "orchid_schema", "orchid_validate",
     ]);
   });
 
@@ -114,5 +114,45 @@ describe("mcp server", () => {
     const done = await call<{ status: string; summary: string }>("orchid_annotation_update", { id: a.id, status: "done", summary: "Switched to the danger variant" });
     expect(done).toMatchObject({ status: "done", summary: "Switched to the danger variant" });
     expect((await call<unknown[]>("orchid_annotations")).length).toBe(0);
+  });
+});
+
+describe("governance", () => {
+  const configPath = join(root, "orchidery.config.json");
+  afterAll(() => rmSync(configPath, { force: true }));
+
+  it("logs grafts with the client name and exposes history", async () => {
+    const before = readFileSync(join(root, "orchid", "todos.orchid"), "utf8");
+    await call("orchid_graft", { annotation: "annX", ops: [{ op: "set_text", address: "page:/todos > #title", value: "My todos" }] });
+    const h = await call<{ agent: string; annotation: string; touched: string[]; before: string; after: string }[]>("orchid_history", { annotation: "annX" });
+    expect(h[0]).toMatchObject({ agent: "test", annotation: "annX", touched: ["page:/todos > #title"] });
+    expect(h[0]!.before).not.toBe(h[0]!.after);
+    writeFileSync(join(root, "orchid", "todos.orchid"), before);
+  });
+
+  it("refuses out-of-scope grafts for this client and enforces budgets", async () => {
+    writeFileSync(configPath, JSON.stringify({ agents: { test: { allow: ["scenario:*"] } }, budgets: { opsPerGraft: 1 } }));
+    const denied = await client.callTool({ name: "orchid_graft", arguments: { ops: [{ op: "set_text", address: "page:/todos > #title", value: "x" }] } });
+    expect(denied.isError).toBe(true);
+    expect((denied.content as { text: string }[])[0]!.text).toContain("O205");
+    const tooMany = await client.callTool({ name: "orchid_graft", arguments: { ops: [{ op: "add_scenario", source: 'scenario "a" { visit "/" }' }, { op: "add_scenario", source: 'scenario "b" { visit "/" }' }] } });
+    expect((tooMany.content as { text: string }[])[0]!.text).toContain("O206");
+  });
+
+  it("holds grafts for review when required, and a human accepts them", async () => {
+    writeFileSync(configPath, JSON.stringify({ review: "required" }));
+    const before = readFileSync(join(root, "orchid", "todos.orchid"), "utf8");
+    const r = await call<{ pending: string; diff: string; touched: string[] }>("orchid_graft", { ops: [{ op: "set_text", address: "page:/todos > #title", value: "Held" }] });
+    expect(r.pending).toMatch(/^[a-z0-9]+$/);
+    expect(r.diff).toContain('+');
+    expect(r.diff).toContain('"Held"');
+    expect(readFileSync(join(root, "orchid", "todos.orchid"), "utf8")).toBe(before);
+    const pending = await call<{ id: string; agent: string }[]>("orchid_pending");
+    expect(pending.map((p) => [p.id, p.agent])).toEqual([[r.pending, "test"]]);
+    const accepted = store.accept(r.pending, "aneesah");
+    expect(accepted.ok).toBe(true);
+    expect(readFileSync(join(root, "orchid", "todos.orchid"), "utf8")).toContain('"Held"');
+    const h = await call<{ agent: string; pending: string }[]>("orchid_history", { limit: 1 });
+    expect(h[0]).toMatchObject({ agent: "test (accepted by aneesah)", pending: r.pending });
   });
 });

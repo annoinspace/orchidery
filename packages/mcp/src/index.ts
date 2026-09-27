@@ -26,6 +26,7 @@ import {
   readSources,
   rootAddress,
   rootUi,
+  scopeFor,
   isRoot,
   validate,
   walk,
@@ -35,7 +36,7 @@ import {
   type Root,
   type UiNode,
 } from "@orchidery/core";
-import { BrowserPool, loadScenarios, preview, runScenario, Store, type PreviewRequest, type PreviewResult, type ScenarioResult } from "@orchidery/devtools";
+import { BrowserPool, loadScenarios, preview, runScenario, sha, Store, type PreviewRequest, type PreviewResult, type ScenarioResult } from "@orchidery/devtools";
 
 export interface ServeOptions {
   root: string;
@@ -286,27 +287,64 @@ export function createServer(opts: ServeOptions): McpServer {
     },
   );
 
+  /** The connected client's name, used for scopes and the graft log. */
+  const agentName = () => server.server.getClientVersion()?.name ?? "unknown";
+
   server.registerTool(
     "orchid_graft",
     {
       description:
-        "Apply structural edits to a .orchid file atomically. Ops run in order; the result is validated and nothing is written if it is invalid. `file` is inferred from the first op's address when omitted. Node values may be .orchid snippets.",
-      inputSchema: { file: z.string().optional(), ops: z.array(GraftOp).min(1) },
+        "Apply structural edits to a .orchid file atomically. Ops run in order; the result is validated and nothing is written if it is invalid. `file` is inferred from the first op's address when omitted. Node values may be .orchid snippets. Pass `annotation` when working one so the change is attributed to it. Projects may scope what you can touch (O205), cap ops (O206), or hold grafts for human review: a held graft returns `pending` and is not on disk until accepted.",
+      inputSchema: {
+        file: z.string().optional(),
+        ops: z.array(GraftOp).min(1),
+        annotation: z.string().optional().describe("Annotation id this graft works on"),
+      },
     },
-    async ({ file, ops }) => {
+    async ({ file, ops, annotation }) => {
       try {
         const { program, diagnostics } = load();
         if (diagnostics.length) return text({ error: "Fix parse errors first", diagnostics });
         const target = resolveFile(program, file, ops);
         const doc = program.documents.find((d) => d.file === target);
         if (!doc) throw new OrchidError({ code: "O201", severity: "error", message: `No such source file \`${target}\`` });
-        const r = graft(doc, ops, { program });
+        const cfg = config();
+        const agent = agentName();
+        const st = store();
+        const before = st.readFile(target);
+        const r = graft(doc, ops, {
+          program,
+          scope: scopeFor(cfg, agent),
+          maxOps: cfg.budgets?.opsPerGraft ?? 50,
+          maxTouched: annotation ? cfg.budgets?.nodesPerAnnotation : undefined,
+          alreadyTouched: annotation ? st.touchedFor(annotation) : undefined,
+        });
+        if (cfg.review === "required") {
+          const held = st.hold({ agent, file: target, ops, touched: r.touched, annotation, before: sha(before), text: r.text });
+          return text({ pending: held.id, file: target, touched: r.touched, diff: held.diff, note: "Held for human review (config review: required). Not written yet; the human accepts or reverts it in edit mode or with `orchidery review`." });
+        }
         writeFileSync(join(root, target), r.text);
-        return text({ file: target, touched: r.touched, text: r.text });
+        const entry = st.appendGraft({ agent, file: target, ops, touched: r.touched, annotation, before: sha(before), after: sha(r.text) });
+        return text({ file: target, touched: r.touched, logged: entry.id, text: r.text });
       } catch (e) {
         return fail(e);
       }
     },
+  );
+
+  server.registerTool(
+    "orchid_history",
+    {
+      description: "The graft log: who changed which nodes, when, under which annotation. Filter by address (its subtree included), annotation, agent, or since (ISO time).",
+      inputSchema: { address: z.string().optional(), annotation: z.string().optional(), agent: z.string().optional(), since: z.string().optional(), limit: z.number().int().optional() },
+    },
+    async (f) => text(store().history({ ...f, limit: f.limit ?? 50 })),
+  );
+
+  server.registerTool(
+    "orchid_pending",
+    { description: "Grafts held for human review (when config review is `required`), with their diffs. Agents cannot accept these; a human does in edit mode or with `orchidery review`.", inputSchema: {} },
+    async () => text(store().listPending().map(({ text: _t, ...p }) => p)),
   );
 
   const browsing = new Browsing(root);

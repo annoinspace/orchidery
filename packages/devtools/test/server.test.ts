@@ -2,7 +2,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createDevtoolsServer, Store } from "../src/index.js";
+import { createDevtoolsServer, sha, Store } from "../src/index.js";
 
 const root = mkdtempSync(join(tmpdir(), "orchidery-"));
 mkdirSync(join(root, "orchid"), { recursive: true });
@@ -73,5 +73,44 @@ describe("devtools server", () => {
     const s = new Store(root);
     expect(Object.keys(s.readSources())).toEqual(["orchid/home.orchid"]);
     expect(() => s.get("../etc")).toThrow();
+  });
+});
+
+describe("graft log and review gate", () => {
+  it("logs grafts and filters history", () => {
+    const s = new Store(root);
+    s.appendGraft({ agent: "a1", file: "orchid/home.orchid", ops: [{ op: "set_text" }], touched: ["page:/ > Text[0]"], annotation: "ann1", before: "x", after: "y" });
+    s.appendGraft({ agent: "a2", file: "orchid/home.orchid", ops: [{ op: "prune" }], touched: ["page:/ > Box[0] > Text[0]"], before: "y", after: "z" });
+    expect(s.history().map((e) => e.agent)).toEqual(["a2", "a1"]);
+    expect(s.history({ agent: "a1" })).toHaveLength(1);
+    expect(s.history({ annotation: "ann1" })).toHaveLength(1);
+    expect(s.history({ address: "page:/ > Box[0]" }).map((e) => e.agent)).toEqual(["a2"]);
+    expect(s.touchedFor("ann1")).toEqual(["page:/ > Text[0]"]);
+  });
+
+  it("holds, lists, diffs, accepts and refuses stale grafts", async () => {
+    const s = new Store(root);
+    const before = s.readFile("orchid/home.orchid");
+    const held = s.hold({ agent: "bot", file: "orchid/home.orchid", ops: [{ op: "set_text" }], touched: ["page:/ > Text[0]"], before: sha(before), text: before.replace("bold", "italic") });
+    expect(held.diff).toContain("+");
+    expect(s.listPending().map((p) => p.id)).toEqual([held.id]);
+    expect((await fetch(`${base}/pending`)).status).toBe(200);
+    expect(await (await fetch(`${base}/pending`)).json()).toHaveLength(1);
+
+    // Someone edits the file underneath: accept must refuse.
+    writeFileSync(join(root, "orchid", "home.orchid"), before + "\n// changed\n");
+    const stale = await fetch(`${base}/pending/${held.id}/accept`, { method: "POST" });
+    expect(stale.status).toBe(409);
+    writeFileSync(join(root, "orchid", "home.orchid"), before);
+
+    const ok = await fetch(`${base}/pending/${held.id}/accept`, { method: "POST" });
+    expect(ok.status).toBe(200);
+    expect(s.readFile("orchid/home.orchid")).toContain("italic");
+    expect(s.listPending()).toHaveLength(0);
+    expect(s.history()[0]).toMatchObject({ agent: "bot (accepted by human)", pending: held.id });
+
+    const held2 = s.hold({ agent: "bot", file: "orchid/home.orchid", ops: [], touched: [], before: "nope", text: "" });
+    expect((await fetch(`${base}/pending/${held2.id}/reject`, { method: "POST" })).status).toBe(204);
+    expect(s.listPending()).toHaveLength(0);
   });
 });

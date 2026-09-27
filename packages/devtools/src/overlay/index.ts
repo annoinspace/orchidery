@@ -3,7 +3,7 @@
  * Lives in a Shadow DOM so it never fights the app's styles or React tree.
  */
 import { toCanvas } from "html-to-image";
-import type { AddressMap, Annotation, NewAnnotation, Region } from "../types.js";
+import type { AddressMap, Annotation, NewAnnotation, PendingGraft, Region } from "../types.js";
 
 type Tool = "select" | "box" | "pen";
 interface Pt { x: number; y: number }
@@ -69,6 +69,20 @@ function boot(): void {
     content: attr(data-note); position: absolute; left: 14px; top: 14px; white-space: pre-wrap; width: 240px;
     background: #111; color: #fff; font: 12px/1.4 ui-sans-serif, system-ui, sans-serif; padding: 8px; border-radius: 8px;
   }
+  .review-panel {
+    position: fixed; right: 16px; bottom: 64px; z-index: 2147483150; width: 520px; max-width: calc(100vw - 32px); max-height: 70vh; overflow: auto;
+    background: #fff; color: #111; border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,.25);
+    font: 13px/1.4 ui-sans-serif, system-ui, sans-serif; padding: 12px; display: flex; flex-direction: column; gap: 12px;
+  }
+  .review-panel .item { border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+  .review-panel .meta { display: flex; justify-content: space-between; gap: 8px; color: #555; font-size: 12px; }
+  .review-panel pre { margin: 0; padding: 8px; background: #f6f6f6; border-radius: 6px; font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; max-height: 220px; overflow: auto; }
+  .review-panel .add { color: #15803d; } .review-panel .del { color: #b91c1c; } .review-panel .hunk { color: #6b7280; }
+  .review-panel .row { display: flex; gap: 8px; justify-content: flex-end; }
+  .review-panel button { all: unset; cursor: pointer; padding: 6px 12px; border-radius: 8px; background: #eee; }
+  .review-panel button.primary { background: #15803d; color: #fff; }
+  .review-panel button.danger { background: #fee2e2; color: #b91c1c; }
+  .toolbar #review.has { background: #15803d; color: #fff; }
   .toast { position: fixed; left: 50%; bottom: 72px; transform: translateX(-50%); z-index: 2147483200; background: #111; color: #fff; padding: 8px 14px; border-radius: 999px; font: 12px ui-sans-serif, system-ui, sans-serif; }
 </style>
 <div class="layer" id="layer"></div>
@@ -79,6 +93,7 @@ function boot(): void {
   <button id="t-box" class="tool" data-tool="box" title="Drag a box" hidden>Box</button>
   <button id="t-pen" class="tool" data-tool="pen" title="Draw freehand" hidden>Pen</button>
   <span class="count" id="count" title="Pending annotations on this page"></span>
+  <button id="review" title="Agent grafts waiting for your review" hidden>Review</button>
 </div>`;
 
   const $ = <T extends HTMLElement>(id: string) => shadow.getElementById(id) as T;
@@ -104,16 +119,69 @@ function boot(): void {
 
   async function refresh(): Promise<void> {
     try {
-      const [m, a] = await Promise.all([
+      const [m, a, p] = await Promise.all([
         fetch(`${BASE}/map`).then((r) => r.json() as Promise<AddressMap>),
         fetch(`${BASE}/annotations`).then((r) => r.json() as Promise<Annotation[]>),
+        fetch(`${BASE}/pending`).then((r) => r.json() as Promise<PendingGraft[]>),
       ]);
       map = m;
       annotations = a.filter((x) => x.url === location.pathname);
+      pending = p;
       renderPins();
+      renderReviewButton();
+      if (reviewPanel) renderReviewPanel();
     } catch {
       /* devtools server not running */
     }
+  }
+
+  // -- review gate -------------------------------------------------------
+
+  let pending: PendingGraft[] = [];
+  let reviewPanel: HTMLDivElement | null = null;
+  const reviewBtn = $("review");
+
+  function renderReviewButton(): void {
+    reviewBtn.hidden = pending.length === 0 && !reviewPanel;
+    reviewBtn.textContent = pending.length ? `Review ${pending.length}` : "Review";
+    reviewBtn.classList.toggle("has", pending.length > 0);
+  }
+
+  reviewBtn.onclick = () => {
+    if (reviewPanel) { reviewPanel.remove(); reviewPanel = null; renderReviewButton(); return; }
+    reviewPanel = document.createElement("div");
+    reviewPanel.className = "review-panel";
+    shadow.appendChild(reviewPanel);
+    renderReviewPanel();
+  };
+
+  function renderReviewPanel(): void {
+    if (!reviewPanel) return;
+    reviewPanel.innerHTML = pending.length ? "" : `<div>Nothing waiting for review.</div>`;
+    for (const p of pending) {
+      const item = document.createElement("div");
+      item.className = "item";
+      item.dataset.pending = p.id;
+      const ops = (p.ops as { op: string }[]).map((o) => o.op).join(", ");
+      item.innerHTML = `
+        <div class="meta"><span><b>${escapeHtml(p.agent)}</b> wants to change <b>${escapeHtml(p.file)}</b></span><span>${new Date(p.createdAt).toLocaleTimeString()}</span></div>
+        <div style="font-size:12px">${escapeHtml(ops)}${p.touched.length ? ` on ${p.touched.map((t) => `<code>${escapeHtml(t)}</code>`).join(", ")}` : ""}</div>
+        <pre>${p.diff.split("\n").slice(2).map((l) => {
+          const cls = l.startsWith("+") ? "add" : l.startsWith("-") ? "del" : l.startsWith("@@") ? "hunk" : "";
+          return cls ? `<span class="${cls}">${escapeHtml(l)}</span>` : escapeHtml(l);
+        }).join("\n")}</pre>
+        <div class="row"><button class="danger" data-act="reject">Revert</button><button class="primary" data-act="accept">Accept</button></div>`;
+      item.querySelector<HTMLButtonElement>('[data-act="accept"]')!.onclick = () => void decide(p.id, "accept");
+      item.querySelector<HTMLButtonElement>('[data-act="reject"]')!.onclick = () => void decide(p.id, "reject");
+      reviewPanel.appendChild(item);
+    }
+  }
+
+  async function decide(id: string, act: "accept" | "reject"): Promise<void> {
+    const res = await fetch(`${BASE}/pending/${id}/${act}`, { method: "POST" });
+    if (res.ok) toast(act === "accept" ? "Accepted. The page will reload when it recompiles." : "Reverted.");
+    else toast(`Could not ${act}: ${((await res.json().catch(() => ({}))) as { error?: string }).error ?? res.statusText}`);
+    await refresh();
   }
   void refresh();
   setInterval(() => void refresh(), 3000);

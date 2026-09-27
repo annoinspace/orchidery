@@ -50,3 +50,37 @@ export interface MapEntry {
   name: string;
 }
 export type AddressMap = Record<string, MapEntry>;
+
+/** One line of `.orchidery/grafts.jsonl`: who changed what, when, and why. */
+export interface GraftLogEntry {
+  id: string;
+  at: string;
+  /** MCP client name, CLI user, or "human" for an overlay accept. */
+  agent: string;
+  file: string;
+  ops: unknown[];
+  touched: string[];
+  annotation?: string;
+  /** sha256 prefix of the file before and after. */
+  before: string;
+  after: string;
+  /** Set when the graft went through the review gate. */
+  pending?: string;
+}
+
+/** A graft held for human review under `.orchidery/pending/`. */
+export interface PendingGraft {
+  id: string;
+  createdAt: string;
+  agent: string;
+  file: string;
+  ops: unknown[];
+  touched: string[];
+  annotation?: string;
+  /** sha256 prefix of the file the ops were applied to. */
+  before: string;
+  /** Resulting source text. */
+  text: string;
+  /** Unified diff for review. */
+  diff: string;
+}

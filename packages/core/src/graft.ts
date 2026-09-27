@@ -57,11 +57,24 @@ export interface GraftResult {
   diagnostics: Diagnostic[];
 }
 
+export interface GraftScope {
+  allow?: string[];
+  deny?: string[];
+}
+
 export interface GraftOptions {
   /** Validate the resulting program; on errors, throw O203 and change nothing. Default true. */
   validate?: boolean;
   /** Other documents in the project, for cross-file validation. */
   program?: Program;
+  /** Address globs this graft may touch. Checked before anything is applied (O205). */
+  scope?: GraftScope;
+  /** Maximum number of ops (O206). */
+  maxOps?: number;
+  /** Maximum distinct addresses the result may touch, counting `alreadyTouched` (O206). */
+  maxTouched?: number;
+  /** Addresses already touched for the same annotation, for the maxTouched budget. */
+  alreadyTouched?: string[];
 }
 
 /**
@@ -73,10 +86,29 @@ export function graft(doc: Document, ops: GraftOp[], opts: GraftOptions = {}): G
   if (!parsed.success) {
     throw new OrchidError({ code: "O202", severity: "error", message: `Invalid graft ops: ${parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}` });
   }
+  if (opts.maxOps !== undefined && parsed.data.length > opts.maxOps) {
+    throw new OrchidError({ code: "O206", severity: "error", message: `Graft has ${parsed.data.length} ops; the budget is ${opts.maxOps} per graft` });
+  }
+  if (opts.scope) {
+    for (const op of parsed.data) {
+      for (const a of opTargets(op)) {
+        if (!inScope(a, opts.scope)) {
+          throw new OrchidError({ code: "O205", severity: "error", message: `\`${a}\` is outside this agent's scope (op ${op.op})`, file: doc.file });
+        }
+      }
+    }
+  }
   const next: Document = structuredClone(doc);
   const touched = new Set<string>();
 
   for (const op of parsed.data) applyOp(next, op, touched);
+
+  if (opts.maxTouched !== undefined) {
+    const total = new Set([...(opts.alreadyTouched ?? []), ...touched]);
+    if (total.size > opts.maxTouched) {
+      throw new OrchidError({ code: "O206", severity: "error", message: `This annotation would touch ${total.size} nodes; the budget is ${opts.maxTouched}` });
+    }
+  }
 
   const program: Program = opts.program
     ? { documents: opts.program.documents.map((d) => (d === doc || (d.file && d.file === doc.file) ? next : d)) }
@@ -102,6 +134,49 @@ export function graft(doc: Document, ops: GraftOp[], opts: GraftOptions = {}): G
 }
 
 // ---------------------------------------------------------------------------
+// Scopes
+// ---------------------------------------------------------------------------
+
+/** The addresses an op targets, for scope checks. Token ops target `tokens`. */
+export function opTargets(op: GraftOp): string[] {
+  switch (op.op) {
+    case "add_token":
+    case "set_token":
+    case "remove_token":
+      return [`tokens:${op.path}`];
+    case "add_component":
+    case "add_island":
+    case "add_scenario": {
+      const m = /^\s*(component|island|scenario)\s+("(?:[^"\\]|\\.)*"|[A-Za-z_$][\w$]*)/.exec(op.source);
+      const name = m?.[2]?.startsWith('"') ? (JSON.parse(m[2]) as string) : (m?.[2] ?? "?");
+      return [`${m?.[1] ?? op.op.slice(4)}:${name}`];
+    }
+    case "set_step":
+    case "insert_step":
+    case "remove_step":
+    case "remove_scenario":
+      return [op.scenario.startsWith("scenario:") ? op.scenario.trim() : `scenario:${op.scenario}`];
+    case "set_state":
+    case "remove_state":
+      return [op.island.startsWith("island:") ? op.island.trim() : `island:${op.island}`];
+    case "move_node":
+      return [normalize(op.address), normalize(op.to)];
+    default:
+      return [normalize(op.address)];
+  }
+}
+
+/** Glob match on addresses: `*` matches any run of characters. */
+export function addressMatches(pattern: string, address: string): boolean {
+  const re = new RegExp("^" + pattern.trim().split("*").map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join(".*") + "$");
+  return re.test(address);
+}
+
+export function inScope(address: string, scope: GraftScope): boolean {
+  if (scope.deny?.some((p) => addressMatches(p, address))) return false;
+  if (scope.allow && scope.allow.length) return scope.allow.some((p) => addressMatches(p, address));
+  return true;
+}
 
 function applyOp(doc: Document, op: GraftOp, touched: Set<string>): void {
   switch (op.op) {

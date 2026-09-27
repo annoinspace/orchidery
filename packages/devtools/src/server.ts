@@ -58,6 +58,19 @@ export function createDevtoolsServer(opts: DevtoolsOptions): { server: Server; s
         log(`preview ${result.url} (${Object.keys(result.boxes).length} boxes, ${result.a11y?.violations.length ?? 0} a11y issues)`);
         return json(res, 200, result);
       }
+      if (req.method === "GET" && path === "/history") {
+        return json(res, 200, store.history({ address: url.searchParams.get("address") ?? undefined, annotation: url.searchParams.get("annotation") ?? undefined, limit: Number(url.searchParams.get("limit") ?? 50) }));
+      }
+      if (req.method === "GET" && path === "/pending") return json(res, 200, store.listPending());
+      const pm = /^\/pending\/([a-z0-9]+)\/(accept|reject)$/.exec(path);
+      if (pm && req.method === "POST") {
+        const id = pm[1]!;
+        if (pm[2] === "reject") return store.reject(id) ? end(res, 204) : json(res, 404, { error: "not found" });
+        const r = store.accept(id, "human");
+        if (!r.ok) return json(res, 409, { error: r.reason });
+        log(`accepted graft ${id} on ${r.entry.file}`);
+        return json(res, 200, r.entry);
+      }
       if (req.method === "GET" && path === "/scenarios") {
         return json(res, 200, loadScenarios(opts.root, config()).map((s) => ({ name: s.name, steps: s.steps.map(describeStep) })));
       }
