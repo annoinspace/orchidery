@@ -1,0 +1,67 @@
+import { db } from "@/lib/db"
+import { notFound } from "next/navigation"
+
+page "/" {
+  meta {
+    title: "Todos"
+  }
+
+  load {
+    todos: await db.list()
+  }
+
+  action add(form: FormData) {
+    const title = String(form.get("title") ?? "").trim()
+    if (title) await db.add(title)
+    revalidate "/"
+  }
+
+  ui {
+    Card(title: "Todos") {
+      Form#add(action: add) {
+        Stack(direction: "row", gap: space.sm) {
+          Input(name: "title", placeholder: "What needs doing?", required)
+          Button(type: "submit", variant: "primary") { "Add" }
+        }
+      }
+      if todos.length === 0 {
+        Text(muted) { "Nothing yet. Add the first one above." }
+      }
+      for todo in todos key todo.id {
+        Stack(direction: "row", gap: space.sm, align: "center", justify: "space-between") {
+          Link(href: `/todos/${todo.id}`, underline: false) { todo.title }
+          Text(size: "sm", muted) { todo.done ? "done" : "open" }
+        }
+      }
+    }
+  }
+}
+
+page "/todos/[id]" {
+  load {
+    todo: (await db.find(params.id)) ?? notFound()
+  }
+
+  action toggle(id: string) {
+    await db.toggle(id)
+    revalidate "/"
+    revalidate "/todos/[id]"
+  }
+
+  action remove(id: string) {
+    await db.remove(id)
+    revalidate "/"
+    redirect "/"
+  }
+
+  ui {
+    Card(title: todo.title) {
+      Text(muted) { todo.done ? "Completed" : "Still open" }
+      Stack(direction: "row", gap: space.sm) {
+        Button#toggle(onClick: toggle(todo.id), variant: "primary") { todo.done ? "Mark open" : "Mark done" }
+        Button#remove(onClick: remove(todo.id), variant: "danger") { "Delete" }
+        Button(href: "/") { "Back" }
+      }
+    }
+  }
+}

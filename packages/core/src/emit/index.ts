@@ -247,7 +247,7 @@ function emitActions(actions: ActionDecl[], doc: Document): string {
     w.indent(() => {
       for (const st of a.body) {
         if (st.kind === "raw") w.line(st.code.endsWith(";") || st.code.endsWith("}") ? st.code : st.code + ";");
-        else if (st.kind === "revalidate") w.line(`revalidatePath(${JSON.stringify(st.path)});`);
+        else if (st.kind === "revalidate") w.line(`revalidatePath(${JSON.stringify(st.path)}${st.path.includes("[") ? ', "page"' : ""});`);
         else w.line(`redirect(${JSON.stringify(st.path)});`);
       }
     });

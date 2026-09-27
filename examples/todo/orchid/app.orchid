@@ -1,0 +1,35 @@
+tokens {
+  color.primary: "#7b3fa0"
+  color.surface: "#ffffff"
+  color.border: "#e5e7eb"
+  color.muted: "#6b7280"
+  space.sm: 8
+  space.md: 16
+  space.lg: 32
+  radius.lg: 12
+}
+
+component Card(title: string, children) {
+  Box(padding: space.md, radius: radius.lg, bg: color.surface, border: "1px solid var(--color-border)", shadow: "sm") {
+    Stack(gap: space.md) {
+      Heading(level: 2) { title }
+      children
+    }
+  }
+}
+
+layout "/" {
+  meta {
+    title: "Orchidery todos"
+  }
+
+  ui {
+    Stack(gap: space.lg, padding: space.lg, maxWidth: 640, margin: "0 auto") {
+      Stack(direction: "row", align: "baseline", justify: "space-between") {
+        Heading#brand(level: 1) { "Orchidery" }
+        Text(size: "sm", muted) { "an agent-first UI format" }
+      }
+      children
+    }
+  }
+}
