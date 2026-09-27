@@ -8,6 +8,8 @@ import { subtreeIdentifiers, Writer } from "./util.js";
 export interface Needs {
   primitives: Set<string>;
   components: Set<string>;
+  /** Declared islands (client components with state) referenced. */
+  islands: Set<string>;
   imports: Set<string>; // user import names referenced
   actions: Set<string>;
   tokens: boolean;
@@ -15,7 +17,7 @@ export interface Needs {
 }
 
 export function newNeeds(): Needs {
-  return { primitives: new Set(), components: new Set(), imports: new Set(), actions: new Set(), tokens: false, fragment: false };
+  return { primitives: new Set(), components: new Set(), islands: new Set(), imports: new Set(), actions: new Set(), tokens: false, fragment: false };
 }
 
 export interface Island {
@@ -39,6 +41,8 @@ export interface JsxContext {
   tokenPaths: Set<string>;
   /** Names of declared components. */
   componentNames: Set<string>;
+  /** Names of declared islands. */
+  islandNames: Set<string>;
   /** Names imported by the document. */
   importNames: Set<string>;
   /** Actions declared in the page, if any. */
@@ -121,6 +125,7 @@ function emitElement(n: Extract<UiNode, { kind: "element" }>, ctx: JsxContext, a
   const primitive = isPrimitive(n.name);
   if (primitive) ctx.needs.primitives.add(n.name);
   else if (ctx.componentNames.has(n.name)) ctx.needs.components.add(n.name);
+  else if (ctx.islandNames.has(n.name)) ctx.needs.islands.add(n.name);
   else if (ctx.importNames.has(n.name)) ctx.needs.imports.add(n.name);
 
   const attrs = n.props.map((p) => emitProp(p, ctx, loopVars));

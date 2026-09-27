@@ -36,6 +36,7 @@ Ask `orchid_explain` for any code.
 | `O112` | Unknown prop on component | The prop is not one of the component's declared parameters. |
 | `O113` | Duplicate prop | The same prop is given twice on one element. |
 | `O114` | Slot outside component or layout | `children` can only be rendered inside a `component` or `layout` body. |
+| `O115` | Invalid island block | An `island` body holds an optional `state { name: initial }` block and a `ui` block, nothing else. Islands cannot declare `load` or `action`; pass data in as params and call page actions through props. |
 | `O116` | Invalid scenario step | Scenario steps are `visit`, `click`, `fill`, `submit`, `press`, `expect`, `wait` and `screenshot`, each with quoted string arguments and numbers where required. |
 | `O117` | Duplicate scenario | Two scenarios share a name. Names are how scenarios are addressed and run, so they must be unique across the project. |
 | `O118` | Scenario target not found | A step names an address that no page, layout or component declares. `#id` targets must exist in some page; full addresses must resolve. |

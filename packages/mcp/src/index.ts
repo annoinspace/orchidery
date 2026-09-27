@@ -147,9 +147,10 @@ export function createServer(opts: ServeOptions): McpServer {
           address: rootAddress(r),
           file: d.file,
           kind: r.kind,
-          params: r.kind === "component" ? r.params.map((p) => p.name) : undefined,
+          params: r.kind === "component" || r.kind === "island" ? r.params.map((p) => p.name) : undefined,
+          state: r.kind === "island" ? r.state.map((s) => s.name) : undefined,
           actions: r.kind === "page" ? r.actions.map((a) => `${a.name}(${a.params.map((p) => p.name).join(", ")})`) : undefined,
-          load: r.kind !== "component" && r.load ? r.load.bindings.map((b) => b.name) : undefined,
+          load: (r.kind === "page" || r.kind === "layout") && r.load ? r.load.bindings.map((b) => b.name) : undefined,
           children: childAddresses(r, rootUi(r)),
         })),
       );

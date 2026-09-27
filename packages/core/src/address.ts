@@ -1,4 +1,4 @@
-import type { ComponentDecl, Document, Item, LayoutDecl, PageDecl, ScenarioDecl, UiNode } from "./ast.js";
+import type { ComponentDecl, Document, IslandDecl, Item, LayoutDecl, PageDecl, ScenarioDecl, UiNode } from "./ast.js";
 import { OrchidError } from "./diagnostics.js";
 
 /**
@@ -15,7 +15,7 @@ import { OrchidError } from "./diagnostics.js";
  * pinned node.
  */
 
-export type Root = PageDecl | LayoutDecl | ComponentDecl;
+export type Root = PageDecl | LayoutDecl | ComponentDecl | IslandDecl;
 
 export interface Located {
   root: Root;
@@ -30,15 +30,16 @@ export function rootAddress(root: Root): string {
     case "page": return `page:${root.route}`;
     case "layout": return `layout:${root.route}`;
     case "component": return `component:${root.name}`;
+    case "island": return `island:${root.name}`;
   }
 }
 
 export function rootUi(root: Root): UiNode[] {
-  return root.kind === "component" ? root.body : root.ui;
+  return root.kind === "component" || root.kind === "island" ? root.body : root.ui;
 }
 
 export function isRoot(item: Item): item is Root {
-  return item.kind === "page" || item.kind === "layout" || item.kind === "component";
+  return item.kind === "page" || item.kind === "layout" || item.kind === "component" || item.kind === "island";
 }
 
 function segmentName(n: UiNode): string {
@@ -99,7 +100,7 @@ export function findRoot(doc: Document, address: string): Root | undefined {
 }
 
 const SEGMENT = /^(#[A-Za-z_$][\w$]*|[A-Za-z_$][\w$]*\[\d+\]|then|else)$/;
-const HEAD = /^(page|layout|component|scenario):.+$/;
+const HEAD = /^(page|layout|component|island|scenario):.+$/;
 
 /** `scenario:<name>` for a scenario declaration. */
 export function scenarioAddress(s: ScenarioDecl): string {
@@ -116,7 +117,7 @@ export function findScenario(doc: Document, addressOrName: string): ScenarioDecl
 export function normalize(address: string): string {
   const parts = address.split(">").map((p) => p.trim());
   if (!HEAD.test(parts[0] ?? "")) {
-    throw new OrchidError({ code: "O204", severity: "error", message: `Invalid address \`${address}\`: must start with page:, layout:, component: or scenario:` });
+    throw new OrchidError({ code: "O204", severity: "error", message: `Invalid address \`${address}\`: must start with page:, layout:, component:, island: or scenario:` });
   }
   for (const p of parts.slice(1)) {
     if (!SEGMENT.test(p)) {

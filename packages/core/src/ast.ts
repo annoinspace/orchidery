@@ -255,10 +255,39 @@ export const ScenarioDecl = z.object({
 });
 export type ScenarioDecl = z.infer<typeof ScenarioDecl>;
 
+// ---------------------------------------------------------------------------
+// Islands: client components with local state. The only way to get client
+// state in Orchidery, which keeps the server/client boundary explicit.
+// ---------------------------------------------------------------------------
+
+export const StateEntry = z.object({
+  kind: z.literal("state"),
+  name: z.string(),
+  initial: Expr,
+  ...spanned,
+});
+export type StateEntry = z.infer<typeof StateEntry>;
+
+export const IslandDecl = z.object({
+  kind: z.literal("island"),
+  name: z.string(),
+  params: z.array(Param),
+  state: z.array(StateEntry),
+  body: z.array(UiNode),
+  ...spanned,
+});
+export type IslandDecl = z.infer<typeof IslandDecl>;
+
+/** `count` -> `setCount` */
+export function setterName(state: string): string {
+  return "set" + state.charAt(0).toUpperCase() + state.slice(1);
+}
+
 export const Item = z.discriminatedUnion("kind", [
   TokensDecl,
   ImportDecl,
   ComponentDecl,
+  IslandDecl,
   PageDecl,
   LayoutDecl,
   ScenarioDecl,

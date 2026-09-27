@@ -57,6 +57,7 @@ page "/todos/[id]" {
 | `component Name(params) { ui }` | A reusable component. `children` as a param makes it accept children. Untyped params are `any`. |
 | `layout "/route" { load? meta? ui }` | A Next.js layout. The root layout (`"/"`) is wrapped in `<html><body>` for you. Must render `children`. |
 | `page "/route" { load? action* meta? ui }` | A Next.js page. Routes use Next segment syntax: `/todos/[id]`, `/docs/[...slug]`. |
+| `island Name(params) { state? ui }` | A client component with local state. The only way to get client state. See Islands below. |
 | `scenario "name" { steps }` | A test in the addressing vocabulary. See Scenarios below. Ignored by the compiler. |
 
 ### Inside a page
@@ -135,6 +136,45 @@ In development every primitive gets a `data-orchid` stamp and `.orchidery/map.js
 stamps back to addresses, files and line ranges. Production builds carry no stamps unless
 `orchidery.config.json` sets `"stamps": "always"`, which keeps them and publishes the map at
 `public/.orchidery/map.json` so an operating agent can resolve addresses on the live site.
+
+## Islands
+
+Pages and layouts render on the server. A subtree with an event prop is extracted into an
+anonymous client island automatically, which covers buttons that call actions. When you
+need **client state**, declare an island:
+
+```orchid
+island Counter(initial: number) {
+  state {
+    count: initial
+    open: false
+  }
+
+  ui {
+    Button#inc(onClick: setCount(count + 1)) { count }
+    if open {
+      Text { "Expanded" }
+    }
+    Button(onClick: setOpen(!open), variant: "ghost") { open ? "Less" : "More" }
+  }
+}
+
+page "/counter" {
+  ui {
+    Counter(initial: 0)
+  }
+}
+```
+
+- Each `state` entry becomes a `useState` in a `"use client"` component under
+  `app/_orchidery/islands/<Name>.tsx`. The value and its setter (`count`, `setCount`) are in
+  scope in `ui`, alongside the params.
+- Islands take data in as params and reach the server through props: pass a page action in
+  as a param (`onSave: save`) and call it from an event prop.
+- An island cannot declare `load` or `action` (O115). The boundary is the declaration, so
+  using an island in a page never creates a second, extracted island.
+- Address root: `island:Counter`. Graft ops: `add_island`, `set_state`, `remove_state`, plus
+  the ordinary node ops on its `ui`.
 
 ## Scenarios
 

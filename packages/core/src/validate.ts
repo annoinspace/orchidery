@@ -1,9 +1,10 @@
-import { isEventProp, type Document, type Expr, type Prop, type Span, type UiNode } from "./ast.js";
+import { isEventProp, setterName, type Document, type Expr, type Prop, type Span, type UiNode } from "./ast.js";
 import { isRoot, rootAddress, rootUi, type Root, walk } from "./address.js";
 import type { Diagnostic } from "./diagnostics.js";
 import { PRIMITIVES, allowedProps, isPrimitive } from "./primitives.js";
 import {
   componentsOf,
+  islandsOf,
   importedNames,
   layoutsOf,
   pagesOf,
@@ -20,12 +21,12 @@ export function validate(program: Program): Diagnostic[] {
   const out: Diagnostic[] = [];
   const tokens = new Set(tokensOf(program).map((t) => t.path));
   const namespaces = tokenNamespaces(program);
-  const components = new Map(componentsOf(program).map((c) => [c.name, c] as const));
+  const components = new Map([...componentsOf(program), ...islandsOf(program)].map((c) => [c.name, c] as const));
 
-  // Duplicate components (O111)
+  // Duplicate components and islands (O111)
   const seenComponents = new Set<string>();
-  for (const c of componentsOf(program)) {
-    if (seenComponents.has(c.name)) out.push(diag("O111", `Component \`${c.name}\` is declared more than once`, fileOf(program, c), c.span));
+  for (const c of [...componentsOf(program), ...islandsOf(program)]) {
+    if (seenComponents.has(c.name)) out.push(diag("O111", `${c.kind === "island" ? "Island" : "Component"} \`${c.name}\` is declared more than once`, fileOf(program, c), c.span));
     seenComponents.add(c.name);
   }
 
@@ -41,7 +42,7 @@ export function validate(program: Program): Diagnostic[] {
   for (const doc of program.documents) {
     const imports = importedNames(doc);
     for (const item of doc.items) {
-      if (item.kind !== "page" && item.kind !== "layout" && item.kind !== "component") continue;
+      if (!isRoot(item)) continue;
       validateRoot(item, { doc, imports, tokens, namespaces, components, out });
     }
   }
@@ -101,7 +102,16 @@ function validateRoot(root: Root, ctx: Ctx): void {
   const scope = new Set<string>(ctx.imports);
   const actions = new Map<string, number>();
 
-  if (root.kind === "component") for (const p of root.params) scope.add(p.name);
+  if (root.kind === "component" || root.kind === "island") for (const p of root.params) scope.add(p.name);
+  if (root.kind === "island") {
+    const seen = new Set<string>();
+    for (const st of root.state) {
+      if (seen.has(st.name)) ctx.out.push(diag("O111", `State \`${st.name}\` is declared more than once in ${rootAddress(root)}`, file, st.span));
+      seen.add(st.name);
+      scope.add(st.name);
+      scope.add(setterName(st.name));
+    }
+  }
   if (root.kind === "page") {
     const seen = new Set<string>();
     for (const a of root.actions) {
@@ -111,7 +121,7 @@ function validateRoot(root: Root, ctx: Ctx): void {
       scope.add(a.name);
     }
   }
-  if (root.kind !== "component" && root.load) {
+  if ((root.kind === "page" || root.kind === "layout") && root.load) {
     const seen = new Set<string>();
     for (const b of root.load.bindings) {
       if (seen.has(b.name)) ctx.out.push(diag("O111", `Load binding \`${b.name}\` is declared more than once in ${rootAddress(root)}`, file, b.span));

@@ -27,11 +27,26 @@ page "/" {
       if todos.length === 0 {
         Text(muted) { "Nothing yet. Add the first one above." }
       }
-      for todo in todos key todo.id {
-        Stack(direction: "row", gap: space.sm, align: "center", justify: "space-between") {
-          Link(href: `/todos/${todo.id}`, underline: false) { todo.title }
-          Text(size: "sm", muted) { todo.done ? "done" : "open" }
-        }
+      TodoList(todos: todos)
+    }
+  }
+}
+
+island TodoList(todos: Array<{ id: string; title: string; done: boolean }>) {
+  state {
+    filter: "all"
+  }
+
+  ui {
+    Stack(direction: "row", gap: space.sm) {
+      Button#filterAll(onClick: setFilter("all"), variant: filter === "all" ? "primary" : "ghost", size: "sm") { "All" }
+      Button#filterOpen(onClick: setFilter("open"), variant: filter === "open" ? "primary" : "ghost", size: "sm") { "Open" }
+      Button#filterDone(onClick: setFilter("done"), variant: filter === "done" ? "primary" : "ghost", size: "sm") { "Done" }
+    }
+    for todo in todos.filter((t) => filter === "all" || (filter === "open" ? !t.done : t.done)) key todo.id {
+      Stack(direction: "row", gap: space.sm, align: "center", justify: "space-between") {
+        Link(href: `/todos/${todo.id}`, underline: false) { todo.title }
+        Text(size: "sm", muted) { todo.done ? "done" : "open" }
       }
     }
   }

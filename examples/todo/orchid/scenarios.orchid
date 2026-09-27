@@ -12,7 +12,7 @@ scenario "add a todo" {
   expect "page:/ > Card[0]" visible
   fill "page:/ > #add > Stack[0] > Input[0]" "Buy matcha"
   submit "#add"
-  expect "page:/ > Card[0] > for[0] > Stack[0] > Link[0]" count 4
+  expect "island:TodoList > for[0] > Stack[0] > Link[0]" count 4
   screenshot "after-add"
 }
 
@@ -21,4 +21,17 @@ scenario "assistant renders a fragment" {
   expect "page:/assistant > Card[0]" visible
   expect "page:/assistant > Card[0]" contains "Where you're at"
   expect "page:/assistant > Card[0]" contains "still open"
+}
+
+scenario "filter todos" {
+  visit "/"
+  expect "#filterAll" attr "class" "o-btn-primary"
+  click "#filterDone"
+  expect "#filterDone" attr "class" "o-btn-primary"
+  expect "island:TodoList > for[0] > Stack[0] > Link[0]" count 1
+  click "#filterOpen"
+  expect "#filterOpen" attr "class" "o-btn-primary"
+  expect "island:TodoList > for[0] > Stack[0] > Text[0]" contains "open"
+  click "#filterAll"
+  expect "#filterAll" attr "class" "o-btn-primary"
 }

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { Expr, type ComponentDecl, type Document, type Element, type Item, type ScenarioStep, type TokensDecl, type UiNode } from "./ast.js";
+import { Expr, type ComponentDecl, type Document, type Element, type IslandDecl, type Item, type ScenarioStep, type TokensDecl, type UiNode } from "./ast.js";
 import { findByAddress, findScenario, isRoot, normalize, requireAddress, rootAddress, scenarioAddress, walkDocument, type Located } from "./address.js";
 import { OrchidError, type Diagnostic } from "./diagnostics.js";
 import { parseExpr, parseItem, parseUiSnippet } from "./parser.js";
@@ -31,6 +31,9 @@ export const GraftOp = z.discriminatedUnion("op", [
   z.object({ op: z.literal("set_token"), path: z.string(), value: z.union([z.string(), z.number()]) }),
   z.object({ op: z.literal("remove_token"), path: z.string() }),
   z.object({ op: z.literal("add_component"), source: z.string().describe("A full `component Name(...) { ... }` declaration") }),
+  z.object({ op: z.literal("add_island"), source: z.string().describe("A full `island Name(params) { state { ... } ui { ... } }` declaration") }),
+  z.object({ op: z.literal("set_state"), island: z.string().describe("Island name or `island:<Name>`"), name: z.string(), initial: ValueInput }).describe("Add or change a state entry's initial value"),
+  z.object({ op: z.literal("remove_state"), island: z.string(), name: z.string() }),
   z.object({ op: z.literal("add_scenario"), source: z.string().describe("A full `scenario \"name\" { steps }` declaration") }),
   z.object({ op: z.literal("set_step"), scenario: z.string().describe("Scenario name or `scenario:<name>`"), index: z.number().int(), step: z.string().describe("One step line, e.g. `click \"#toggle\"`") }).describe("Replace a step"),
   z.object({ op: z.literal("insert_step"), scenario: z.string(), index: z.number().int().optional(), step: z.string() }).describe("Insert a step; appends when index is omitted"),
@@ -211,6 +214,29 @@ function applyOp(doc: Document, op: GraftOp, touched: Set<string>): void {
       const firstPage = doc.items.findIndex((i) => i.kind === "page" || i.kind === "layout");
       doc.items.splice(firstPage < 0 ? doc.items.length : firstPage, 0, item);
       touched.add(`component:${item.name}`);
+      return;
+    }
+    case "add_island": {
+      const item: Item = parseItem(op.source);
+      if (item.kind !== "island") fail("O202", "add_island needs an `island` declaration");
+      if (doc.items.some((i) => (i.kind === "component" || i.kind === "island") && i.name === item.name)) fail("O202", `\`${item.name}\` already exists`);
+      const firstPage = doc.items.findIndex((i) => i.kind === "page" || i.kind === "layout");
+      doc.items.splice(firstPage < 0 ? doc.items.length : firstPage, 0, item);
+      touched.add(`island:${item.name}`);
+      return;
+    }
+    case "set_state":
+    case "remove_state": {
+      const name = op.island.startsWith("island:") ? op.island.slice("island:".length).trim() : op.island;
+      const isl = doc.items.find((i): i is IslandDecl => i.kind === "island" && i.name === name);
+      if (!isl) fail("O201", `No island \`${name}\``);
+      const i = isl.state.findIndex((s) => s.name === op.name);
+      if (op.op === "remove_state") {
+        if (i < 0) fail("O202", `No state \`${op.name}\` on island ${name}`);
+        isl.state.splice(i, 1);
+      } else if (i < 0) isl.state.push({ kind: "state", name: op.name, initial: toExpr(op.initial) });
+      else isl.state[i]!.initial = toExpr(op.initial);
+      touched.add(`island:${name}`);
       return;
     }
     case "add_scenario": {

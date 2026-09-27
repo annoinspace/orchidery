@@ -5,6 +5,7 @@ import type {
   Document,
   Expr,
   ImportDecl,
+  IslandDecl,
   Item,
   LayoutDecl,
   LoadBlock,
@@ -19,7 +20,7 @@ import type {
 } from "./ast.js";
 import { Scanner } from "./lexer.js";
 
-const TOP_LEVEL = ["tokens", "import", "component", "layout", "page", "scenario"];
+const TOP_LEVEL = ["tokens", "import", "component", "island", "layout", "page", "scenario"];
 const PAGE_BLOCKS = ["load", "action", "meta", "ui"];
 const LAYOUT_BLOCKS = ["load", "meta", "ui"];
 const DOTTED = /^[A-Za-z_$][\w$]*(\.[A-Za-z_$][\w$]*)*$/;
@@ -81,6 +82,7 @@ class Parser {
       case "tokens": return this.tokens(start);
       case "import": return this.import(start);
       case "component": return this.component(start);
+      case "island": return this.island(start);
       case "layout": return this.layout(start);
       case "page": return this.page(start);
       case "scenario": return this.scenario(start);
@@ -234,6 +236,53 @@ class Parser {
     this.s.skipWs();
     const body = this.block(() => this.uiItems());
     return { kind: "component", name, params, body, span: this.s.spanFrom(start) };
+  }
+
+  // -- island --------------------------------------------------------------
+
+  private island(start: ReturnType<Scanner["position"]>): IslandDecl {
+    this.s.skipInline();
+    const name = this.s.readIdent();
+    this.s.skipInline();
+    const params = this.s.peek() === "(" ? this.params() : [];
+    this.s.skipWs();
+    const island: IslandDecl = { kind: "island", name, params, state: [], body: [] };
+    this.block(() => {
+      for (;;) {
+        this.s.skipWs();
+        if (this.s.peek() === "}" || this.s.eof) return;
+        const bs = this.s.position();
+        const word = this.s.readIdent();
+        switch (word) {
+          case "state":
+            this.s.skipWs();
+            this.block(() => {
+              for (;;) {
+                this.s.skipWs();
+                if (this.s.peek() === "}" || this.s.eof) return;
+                const es = this.s.position();
+                const sname = this.s.readIdent();
+                this.s.skipInline();
+                this.s.expect(":");
+                this.s.skipInline();
+                const initial = this.exprValue(this.s.readRaw("}", true), es);
+                island.state.push({ kind: "state", name: sname, initial, span: this.s.spanFrom(es) });
+                this.s.skipInline();
+                this.s.eat(";");
+              }
+            });
+            break;
+          case "ui":
+            this.s.skipWs();
+            island.body = this.block(() => this.uiItems());
+            break;
+          default:
+            this.s.fail("O115", `Unknown block \`${word}\` in island; expected state or ui`, bs);
+        }
+      }
+    });
+    island.span = this.s.spanFrom(start);
+    return island;
   }
 
   private params(): Param[] {

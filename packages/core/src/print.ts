@@ -23,6 +23,14 @@ function printItem(item: Item): string {
       return `component ${item.name}${printParams(item.params)} {\n${printUi(item.body, 1)}\n}`;
     case "scenario":
       return `scenario ${JSON.stringify(item.name)} {\n${item.steps.map((s) => INDENT + printStep(s)).join("\n")}\n}`;
+    case "island": {
+      const blocks: string[] = [];
+      if (item.state.length) {
+        blocks.push(`${INDENT}state {\n${item.state.map((s) => `${INDENT}${INDENT}${s.name}: ${exprToCode(s.initial)}`).join("\n")}\n${INDENT}}`);
+      }
+      blocks.push(`${INDENT}ui {\n${printUi(item.body, 2)}\n${INDENT}}`);
+      return `island ${item.name}${printParams(item.params)} {\n${blocks.join("\n\n")}\n}`;
+    }
     case "layout": {
       const blocks: string[] = [];
       if (item.load) blocks.push(printLoad(item.load.bindings));

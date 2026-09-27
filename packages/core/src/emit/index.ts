@@ -1,8 +1,8 @@
-import type { ActionDecl, ComponentDecl, Document, LayoutDecl, PageDecl, Span, UiNode } from "../ast.js";
-import { exprToCode } from "../ast.js";
-import { rootAddress, stamp } from "../address.js";
+import type { ActionDecl, ComponentDecl, Document, IslandDecl, LayoutDecl, PageDecl, Span, UiNode } from "../ast.js";
+import { exprToCode, setterName } from "../ast.js";
+import { rootAddress, stamp, type Root } from "../address.js";
 import type { Diagnostic } from "../diagnostics.js";
-import { componentsOf, importedNames, importsOf, layoutsOf, pagesOf, tokensOf, type Program } from "../program.js";
+import { componentsOf, importedNames, importsOf, islandsOf, layoutsOf, pagesOf, tokensOf, type Program } from "../program.js";
 import { validate } from "../validate.js";
 import { emitJsx, newNeeds, type Island, type JsxContext, type Needs } from "./jsx.js";
 import { emitTokensCss, emitTokensTs } from "./tokens.js";
@@ -50,16 +50,21 @@ export function emit(program: Program, opts: EmitOptions = {}): EmitResult {
   const tokenPaths = new Set(tokens.map((t) => t.path));
   const components = componentsOf(program);
   const componentNames = new Set(components.map((c) => c.name));
+  const islands = islandsOf(program);
+  const islandNames = new Set(islands.map((i) => i.name));
 
   files[`${GEN}/tokens.css`] = emitTokensCss(tokens);
   files[`${GEN}/tokens.ts`] = emitTokensTs(tokens);
 
-  const shared = { dev, stamp, runtime, tokenPaths, componentNames, opts };
+  const shared = { dev, stamp, runtime, tokenPaths, componentNames, islandNames, opts };
 
   for (const doc of program.documents) {
     const importNames = importedNames(doc);
     for (const c of components.filter((c) => doc.items.includes(c))) {
       emitComponent(c, doc, { ...shared, importNames }, files, map);
+    }
+    for (const i of islands.filter((i) => doc.items.includes(i))) {
+      emitDeclaredIsland(i, doc, { ...shared, importNames }, files, map);
     }
     for (const p of pagesOf(program).filter((p) => doc.items.includes(p))) {
       emitPage(p, doc, { ...shared, importNames }, files, map);
@@ -70,7 +75,7 @@ export function emit(program: Program, opts: EmitOptions = {}): EmitResult {
   }
 
   if (!layoutsOf(program).some((l) => l.route === "/")) {
-    files["layout.tsx"] = defaultRootLayout({ ...shared, importNames: new Set() });
+    files["layout.tsx"] = defaultRootLayout({ ...shared, importNames: new Set<string>() });
   }
 
   return { files, map, diagnostics };
@@ -84,11 +89,12 @@ interface Shared {
   runtime: string;
   tokenPaths: Set<string>;
   componentNames: Set<string>;
+  islandNames: Set<string>;
   importNames: Set<string>;
   opts: EmitOptions;
 }
 
-function ctxFor(root: PageDecl | LayoutDecl | ComponentDecl, s: Shared, dataNames: Set<string>, map: Record<string, MapEntry>, doc: Document, extractIslands: boolean): JsxContext {
+function ctxFor(root: Root, s: Shared, dataNames: Set<string>, map: Record<string, MapEntry>, doc: Document, extractIslands: boolean): JsxContext {
   return {
     rootAddress: rootAddress(root),
     dev: s.stamp,
@@ -97,6 +103,7 @@ function ctxFor(root: PageDecl | LayoutDecl | ComponentDecl, s: Shared, dataName
     },
     tokenPaths: s.tokenPaths,
     componentNames: s.componentNames,
+    islandNames: s.islandNames,
     importNames: s.importNames,
     actionNames: new Set(root.kind === "page" ? root.actions.map((a) => a.name) : []),
     dataNames,
@@ -117,6 +124,7 @@ function header(w: Writer, needs: Needs, s: Shared, doc: Document, dir: string, 
   if (needs.primitives.size) w.line(`import { ${[...needs.primitives].sort().join(", ")} } from "${s.runtime}";`);
   if (needs.tokens) w.line(`import { tokens } from "${relativeImport(dir, `${GEN}/tokens`)}";`);
   for (const c of [...needs.components].sort()) w.line(`import { ${c} } from "${relativeImport(dir, `${GEN}/components/${c}`)}";`);
+  for (const i of [...needs.islands].sort()) w.line(`import { ${i} } from "${relativeImport(dir, `${GEN}/islands/${i}`)}";`);
   userImports(w, needs.imports, doc);
   if (extra.actions?.length && extra.actionsPath) w.line(`import { ${extra.actions.sort().join(", ")} } from "${extra.actionsPath}";`);
 }
@@ -161,6 +169,37 @@ function emitComponent(c: ComponentDecl, doc: Document, s: Shared, files: Record
   });
   w.line("}");
   files[`${dir}/${c.name}.tsx`] = w.toString();
+}
+
+// ---------------------------------------------------------------------------
+// Islands: declared client components with useState per state entry
+// ---------------------------------------------------------------------------
+
+function emitDeclaredIsland(isl: IslandDecl, doc: Document, s: Shared, files: Record<string, string>, map: Record<string, MapEntry>): void {
+  const dir = `${GEN}/islands`;
+  const dataNames = new Set<string>([...isl.params.map((p) => p.name), ...isl.state.map((st) => st.name), ...isl.state.map((st) => setterName(st.name))]);
+  const ctx = ctxFor(isl, s, dataNames, map, doc, false);
+  const jsx = emitJsx(isl.body, ctx);
+  for (const st of isl.state) for (const id of identifiers(exprToCode(st.initial))) if (s.importNames.has(id)) ctx.needs.imports.add(id);
+  const w = new Writer();
+  w.line('"use client";');
+  w.line("// Generated by Orchidery from " + (doc.file ?? "a .orchid file") + ". Do not edit; edit the source instead.");
+  const hasChildren = isl.params.some((p) => p.name === "children");
+  header(w, ctx.needs, s, doc, dir, { react: ["useState", ...(hasChildren ? ["type ReactNode"] : [])] });
+  w.line();
+  const propsType = isl.params
+    .map((p) => (p.name === "children" ? "children?: ReactNode" : `${p.name}${p.type ? `: ${p.type}` : ": any"}`))
+    .join("; ");
+  const destructure = isl.params.map((p) => p.name).join(", ");
+  w.line(`export function ${isl.name}(${isl.params.length ? `{ ${destructure} }: { ${propsType} }` : ""}) {`);
+  w.indent(() => {
+    for (const st of isl.state) w.line(`const [${st.name}, ${setterName(st.name)}] = useState(${exprToCode(st.initial)});`);
+    w.line("return (");
+    w.indent(() => jsx.split("\n").forEach((l) => w.line(l)));
+    w.line(");");
+  });
+  w.line("}");
+  files[`${dir}/${isl.name}.tsx`] = w.toString();
 }
 
 function hasEventProps(nodes: UiNode[]): boolean {

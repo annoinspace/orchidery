@@ -171,7 +171,7 @@ describe("edit mode -> annotation -> graft -> reload", () => {
 
     const all = await client.callTool({ name: "orchid_scenario_run", arguments: {} });
     const outAll = JSON.parse((all.content as { text: string }[])[0]!.text);
-    expect(outAll.results.map((r: { name: string; ok: boolean }) => [r.name, r.ok])).toEqual([["toggle a todo", true], ["add a todo", true], ["assistant renders a fragment", true]]);
+    expect(outAll.results.map((r: { name: string; ok: boolean }) => [r.name, r.ok])).toEqual([["toggle a todo", true], ["add a todo", true], ["assistant renders a fragment", true], ["filter todos", true]]);
     expect(existsSync(join(root, ".orchidery/scenarios/add-a-todo/after-add.png"))).toBe(true);
   });
 

@@ -82,6 +82,8 @@ card and the targets are its rows.
 | `wrap_node { address, name, id?, props? }` | Wrap in a new element, e.g. a `Stack`. |
 | `add_token` / `set_token` / `remove_token` | Design tokens. |
 | `add_component { source }` | A whole `component Name(...) { ... }` declaration. |
+| `add_island { source }` | A whole `island Name(...) { state { ... } ui { ... } }` declaration. Use this when a change needs client state. |
+| `set_state` / `remove_state { island, name, initial? }` | Add, change or remove a state entry on an island. |
 | `add_scenario { source }` | A whole `scenario "name" { ... }` declaration. |
 | `set_step` / `insert_step` / `remove_step { scenario, index, step? }` | Edit one line of a scenario. `step` is a line like `click "#toggle"`. |
 | `remove_scenario { scenario }` | |

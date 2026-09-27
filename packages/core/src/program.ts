@@ -1,4 +1,4 @@
-import type { ComponentDecl, Document, ImportDecl, LayoutDecl, PageDecl, TokenEntry } from "./ast.js";
+import type { ComponentDecl, Document, ImportDecl, IslandDecl, LayoutDecl, PageDecl, TokenEntry } from "./ast.js";
 import { parse } from "./parser.js";
 
 /** A set of .orchid documents compiled together. */
@@ -24,6 +24,10 @@ export function tokenNamespaces(p: Program): Set<string> {
 
 export function componentsOf(p: Program): ComponentDecl[] {
   return p.documents.flatMap((d) => d.items.filter((i): i is ComponentDecl => i.kind === "component"));
+}
+
+export function islandsOf(p: Program): IslandDecl[] {
+  return p.documents.flatMap((d) => d.items.filter((i): i is IslandDecl => i.kind === "island"));
 }
 
 export function pagesOf(p: Program): PageDecl[] {
