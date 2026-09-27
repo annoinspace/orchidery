@@ -1,0 +1,7 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.orchidery/
+examples/*/app/
+examples/*/.next/
+examples/*/next-env.d.ts

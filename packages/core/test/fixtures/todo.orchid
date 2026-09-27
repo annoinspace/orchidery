@@ -1,0 +1,53 @@
+import { db } from "@/lib/db"
+
+tokens {
+  color.primary: "#7b3fa0"
+  color.surface: "#ffffff"
+  space.md: 16
+  radius.lg: 12
+}
+
+component Card(title: string, children) {
+  Box(padding: space.md, radius: radius.lg, bg: color.surface) {
+    Heading(level: 2) { title }
+    children
+  }
+}
+
+layout "/" {
+  meta {
+    title: "Todos"
+  }
+
+  ui {
+    Stack(gap: space.md) {
+      Heading(level: 1) { "Orchidery todos" }
+      children
+    }
+  }
+}
+
+page "/todos/[id]" {
+  load {
+    todo: await db.todo.find(params.id)
+  }
+
+  action toggle(id: string) {
+    await db.todo.toggle(id)
+    revalidate "/todos"
+  }
+
+  ui {
+    Card(title: todo.title) {
+      Text { todo.description }
+      if todo.done {
+        Text(color: color.primary) { "Done" }
+      } else {
+        Button#done(onClick: toggle(todo.id), variant: "primary") { "Mark done" }
+      }
+      for tag, i in todo.tags key tag {
+        Text(size: "sm") { `${i + 1}. ${tag}` }
+      }
+    }
+  }
+}
