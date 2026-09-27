@@ -1,7 +1,8 @@
 export * from "./ast.js";
 export * from "./diagnostics.js";
 export { Scanner } from "./lexer.js";
-export { parse, type ParseOptions } from "./parser.js";
+export { parse, parseExpr, parseUiSnippet, parseItem, type ParseOptions } from "./parser.js";
+export * from "./graft.js";
 export { print, printUi } from "./print.js";
 export * from "./address.js";
 export * from "./primitives.js";

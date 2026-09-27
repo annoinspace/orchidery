@@ -31,6 +31,31 @@ export function parse(src: string, opts: ParseOptions = {}): Document {
   return new Parser(src, opts.file).document();
 }
 
+/** Classify a raw value the same way prop values are classified. */
+export function parseExpr(raw: string): Expr {
+  const p = new Parser(raw);
+  return p.exprValue(raw.trim(), p.s.position());
+}
+
+/** Parse a fragment of ui block content into nodes. */
+export function parseUiSnippet(src: string): UiNode[] {
+  const p = new Parser(src);
+  const items = p.uiItems();
+  p.s.skipWs();
+  if (!p.s.eof) p.s.fail("O001", `Unexpected \`${p.s.describeNext()}\` after ui snippet`);
+  return items;
+}
+
+/** Parse a single top-level declaration such as a component. */
+export function parseItem(src: string): Item {
+  const p = new Parser(src);
+  p.s.skipWs();
+  const item = p.item();
+  p.s.skipWs();
+  if (!p.s.eof) p.s.fail("O001", "Expected exactly one declaration");
+  return item;
+}
+
 class Parser {
   s: Scanner;
   constructor(src: string, file?: string) {
@@ -47,7 +72,7 @@ class Parser {
     return { kind: "document", file: this.s.file, items };
   }
 
-  private item(): Item {
+  item(): Item {
     const start = this.s.position();
     const word = this.s.readIdent();
     switch (word) {
@@ -297,7 +322,7 @@ class Parser {
     return result;
   }
 
-  private uiItems(): UiNode[] {
+  uiItems(): UiNode[] {
     const items: UiNode[] = [];
     for (;;) {
       this.s.skipWs();
@@ -433,7 +458,7 @@ class Parser {
   // -- expressions ---------------------------------------------------------
 
   /** Classify a raw expression as a literal, a dotted reference, or code. */
-  private exprValue(raw: string, at: ReturnType<Scanner["position"]>): Expr {
+  exprValue(raw: string, at: ReturnType<Scanner["position"]>): Expr {
     const span = this.s.spanFrom(at);
     if (raw === "") this.s.fail("O001", "Expected a value", at);
     if ((raw.startsWith('"') || raw.startsWith("'")) && raw.endsWith(raw[0]!) && raw.length >= 2) {
